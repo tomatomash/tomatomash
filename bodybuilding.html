@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STAMINA - Workout Timer</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .progress-shrink { transition: width 1s linear; }
+        .mute-btn { transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="bg-slate-950">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const IconDumbbell = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14.4 14.4 5.6 5.6"/><path d="M22 14.5V22h-7.5"/><path d="m9.6 9.6-5.6-5.6"/><path d="M2 9.5V2h7.5"/><path d="m4.3 19.7 15.4-15.4"/><path d="m11 15-4-4"/><path d="m13 9 4 4"/></svg>;
+        const IconActivity = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+        const IconSkip = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>;
+        const IconBack = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>;
+
+        // --- 核心音效系统 ---
+        let audioCtx = null;
+        
+        const initAudio = () => {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        };
+
+        const playTone = (freq, duration, volume = 1.0) => { // 基础音量提升至 1.0
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            // 使用 triangle 波形，比 sine 波更响亮且穿透力强
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        };
+
+        const SFX = {
+            tick: () => playTone(880, 0.1, 0.5),    // 倒计时：高音嘀
+            start: () => {                          // 开始：强力上升音
+                playTone(440, 0.1, 0.8); 
+                setTimeout(() => playTone(554, 0.1, 0.8), 100);
+                setTimeout(() => playTone(659, 0.3, 1.0), 200);
+            },
+            end: () => {                            // 结束：强力下降音
+                playTone(659, 0.1, 1.0);
+                setTimeout(() => playTone(329, 0.4, 1.0), 100);
+            },
+            click: () => playTone(600, 0.05, 0.4)   // 普通点击
+        };
+
+        const workoutData = {
+            A: {
+                id: 'A', title: "Day A: Strength", icon: <IconDumbbell />, color: "bg-blue-600",
+                exercises: [
+                    { name: "Squat", target: "10 Reps", rhythm: "3s Down / 2s Hold / 1s Up", rest: 20, totalTime: 60, type: "reps" },
+                    { name: "Romanian Deadlift", target: "10 Reps", rhythm: "3s Down / 0s Hold / 1s Up", rest: 20, totalTime: 40, type: "reps" },
+                    { name: "Standing Press", target: "10 Reps", rhythm: "2s Down / 0s Hold / 1s Up", rest: 20, totalTime: 30, type: "reps" },
+                    { name: "Barbell Curl", target: "20 Reps", rhythm: "1s Down / 0s Hold / 1s Up", rest: 20, totalTime: 40, type: "reps" }
+                ]
+            },
+            B: {
+                id: 'B', title: "Day B: Endurance", icon: <IconActivity />, color: "bg-emerald-600",
+                exercises: [
+                    { name: "Kettlebell Swing", target: "60s", rhythm: "1s Down / 1s Up", rest: 20, totalTime: 60, type: "time" },
+                    { name: "Glute Bridge", target: "60s", rhythm: "1s Down / 1s Up / 2s Peak Hold", rest: 20, totalTime: 60, type: "time" },
+                    { name: "Cross-leg Climber", target: "60s", rhythm: "1s Left / 1s Right", rest: 20, totalTime: 60, type: "time" },
+                    { name: "Push-up Hold", target: "60s", rhythm: "2s Down / 2s Hold / 1s Up", rest: 20, totalTime: 60, type: "time" }
+                ]
+            }
+        };
+
+        function App() {
+            const [view, setView] = React.useState('home');
+            const [activePlan, setActivePlan] = React.useState(null);
+            const [exIdx, setExIdx] = React.useState(0);
+            const [timerMode, setTimerMode] = React.useState('idle'); 
+            const [timeLeft, setTimeLeft] = React.useState(0);
+            const [totalTime, setTotalTime] = React.useState(0);
+            const [isRunning, setIsRunning] = React.useState(false);
+            const [soundMuted, setSoundMuted] = React.useState(false);
+            const [cycleCount, setCycleCount] = React.useState(1);
+
+            const currentEx = activePlan?.exercises[exIdx];
+            const totalEx = activePlan?.exercises.length || 0;
+            const progressPercent = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+
+            const initTimer = (time) => {
+                setTimerMode('idle');
+                setTimeLeft(time);
+                setTotalTime(time);
+            };
+
+            const handleAction = (callback) => {
+                initAudio();
+                if (callback) callback();
+            };
+
+            const advanceExercise = () => {
+                setIsRunning(false);
+                if (exIdx < totalEx - 1) {
+                    setExIdx(prev => prev + 1);
+                    initTimer(activePlan.exercises[exIdx + 1].totalTime);
+                } else {
+                    setExIdx(0);
+                    setCycleCount(prev => prev + 1);
+                    initTimer(activePlan.exercises[0].totalTime);
+                }
+            };
+
+            React.useEffect(() => {
+                if (currentEx) initTimer(currentEx.totalTime);
+            }, [exIdx, activePlan]);
+
+            React.useEffect(() => {
+                let interval;
+                if (isRunning && timeLeft > 0) {
+                    interval = setInterval(() => {
+                        setTimeLeft(prev => {
+                            const next = prev - 1;
+                            // 倒计时扩大至最后 5 秒
+                            if (!soundMuted && next <= 5 && next > 0) SFX.tick(); 
+                            return next;
+                        });
+                    }, 1000);
+                } else if (isRunning && timeLeft === 0) {
+                    setIsRunning(false);
+                    if (!soundMuted) SFX.end();
+                    if (timerMode === 'exercise') {
+                        setTimerMode('rest');
+                        setTimeLeft(currentEx.rest);
+                        setTotalTime(currentEx.rest);
+                        setIsRunning(true);
+                    } else {
+                        advanceExercise();
+                    }
+                }
+                return () => clearInterval(interval);
+            }, [isRunning, timeLeft, soundMuted, timerMode]);
+
+            const startWorkout = (id) => {
+                handleAction(() => {
+                    setActivePlan(workoutData[id]);
+                    setExIdx(0);
+                    setCycleCount(1);
+                    setSoundMuted(false);
+                    setView('workout');
+                });
+            };
+
+            const toggleTimer = (mode) => {
+                handleAction(() => {
+                    if (!soundMuted) SFX.click();
+                    setTimerMode(mode);
+                    setIsRunning(!isRunning);
+                });
+            };
+
+            const formatSecs = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+            if (view === 'home') {
+                return (
+                    <div className="min-h-screen text-white p-6 flex flex-col items-center justify-center">
+                        <h1 className="text-4xl font-black mb-8">STAMINA</h1>
+                        <div className="grid gap-6 w-full max-w-md">
+                            {Object.values(workoutData).map(p => (
+                                <button key={p.id} onClick={() => startWorkout(p.id)} className="flex items-center gap-5 p-6 bg-slate-900 border border-slate-800 rounded-3xl text-left hover:border-slate-600 transition-all group">
+                                    <div className={`p-4 rounded-2xl ${p.color} group-hover:scale-110 transition-transform`}>{p.icon}</div>
+                                    <h3 className="text-xl font-bold">{p.title}</h3>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen text-white flex flex-col">
+                    <header className="p-4 bg-slate-900/50 backdrop-blur-md sticky top-0 border-b border-slate-800 flex items-center justify-between z-10">
+                        <button onClick={() => setView('home')} className="p-2 hover:bg-slate-800 rounded-xl transition-colors"><IconBack /></button>
+                        <div className="text-center">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Cycle: {cycleCount} | Exercise {exIdx + 1} / {totalEx}</p>
+                            <h2 className="font-bold">{activePlan.title}</h2>
+                        </div>
+                        <button 
+                            onClick={() => handleAction(() => setSoundMuted(!soundMuted))}
+                            className="mute-btn px-3 py-2 rounded-xl text-sm"
+                            style={{ color: soundMuted ? '#fff' : '#6b7280', fontWeight: soundMuted ? '700' : '400', backgroundColor: soundMuted ? 'rgba(55,65,81,0.8)' : 'transparent' }}
+                        >Mute</button>
+                    </header>
+
+                    <main className="flex-1 p-6 flex flex-col items-center">
+                        <div className="w-full max-w-md">
+                            <div className="flex justify-center items-center mb-6">
+                                <h2 className="text-2xl font-black text-center">{currentEx.name}</h2>
+                                <span className="ml-3 text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded-full">{currentEx.target}</span>
+                            </div>
+
+                            <div className="w-full h-24 bg-slate-800/50 rounded-xl relative overflow-hidden mb-8">
+                                <div className={`progress-shrink absolute top-0 left-0 h-full rounded-xl ${timerMode === 'exercise' ? 'bg-emerald-600/70' : 'bg-blue-600/70'}`} style={{ width: `${progressPercent}%` }}></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-5xl font-black text-white">{formatSecs(timeLeft)}</span>
+                                </div>
+                                <div className="absolute bottom-2 right-4 flex items-center">
+                                    <span className="text-lg font-medium text-slate-200">{timerMode === 'exercise' ? 'WORKING' : timerMode === 'rest' ? 'RESTING' : 'READY'}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8">
+                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2 text-center">Rhythm</p>
+                                <p className="text-xl font-bold text-center">{currentEx.rhythm}</p>
+                            </div>
+
+                            <div className="space-y-4 mb-8">
+                                {timerMode === 'idle' ? (
+                                    <button onClick={() => handleAction(() => { if(!soundMuted) SFX.start(); setIsRunning(true); setTimerMode('exercise'); })} className="w-full bg-white text-black py-6 rounded-2xl font-black text-xl shadow-xl shadow-white/5 active:scale-95 transition-transform">Start</button>
+                                ) : (
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <button onClick={() => handleAction(() => { if(!soundMuted) SFX.click(); setIsRunning(false); initTimer(currentEx.totalTime); })} className="bg-slate-800 py-6 rounded-2xl font-bold text-lg">Reset</button>
+                                        <button onClick={() => toggleTimer(timerMode)} className={`py-6 rounded-2xl font-bold text-lg shadow-lg ${isRunning ? 'bg-slate-700' : (timerMode === 'exercise' ? 'bg-emerald-600' : 'bg-blue-600')}`}>{isRunning ? "Pause" : "Start"}</button>
+                                        <button onClick={() => handleAction(() => { if(!soundMuted) SFX.click(); advanceExercise(); })} className="bg-slate-800 py-6 rounded-2xl font-bold text-lg">Next</button>
+                                    </div>
+                                )}
+                                <button onClick={() => handleAction(() => { if(!soundMuted) SFX.click(); advanceExercise(); })} className="w-full flex items-center justify-center gap-2 text-slate-400 font-bold text-sm py-2 hover:text-white transition-colors">
+                                    Skip Current Exercise <IconSkip />
+                                </button>
+                            </div>
+
+                            <div className="border-t border-slate-800 pt-6">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Workout Sequence</h4>
+                                <div className="space-y-2">
+                                    {activePlan.exercises.map((ex, idx) => (
+                                        <button key={idx} onClick={() => handleAction(() => { setExIdx(idx); initTimer(activePlan.exercises[idx].totalTime); })} className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all ${idx === exIdx ? 'bg-slate-800 border-emerald-500' : 'bg-slate-900 border-slate-800 hover:border-slate-600'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === exIdx ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500'}`}>{idx + 1}</div>
+                                                <span className={`text-left ${idx === exIdx ? 'text-white font-extrabold' : 'text-slate-300'}`}>{ex.name} | {ex.target}</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

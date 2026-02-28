@@ -1,0 +1,472 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dual Protocol Trainer: Hard & Flaccid</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            transition: background-color 0.5s;
+        }
+
+        /* Animations */
+        .breathing-circle {
+            animation: breathe 5s infinite ease-in-out;
+        }
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.15); opacity: 1; }
+        }
+
+        /* Mode Specific Themes */
+        .mode-hard body { background-color: #f8fafc; color: #1e293b; }
+        .mode-flaccid body { background-color: #f0f9ff; color: #0f172a; }
+
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Progress Bar (Right to Left visual effect by anchoring left and reducing width) */
+        .progress-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        #progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0; 
+            height: 100%;
+            width: 100%;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen transition-colors duration-500 bg-slate-50 text-slate-900">
+
+    <nav class="p-4 border-b border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 transition-colors duration-500" id="nav-bar">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight" id="app-title">K exercise protocol</h1>
+        </div>
+        
+        <div class="flex bg-black/20 p-1 rounded-lg">
+            <button onclick="switchMode('hard')" id="btn-mode-hard" class="w-24 px-6 py-2 rounded-md text-sm font-bold transition-all bg-sky-600 text-white shadow-lg text-center">
+                HARD
+            </button>
+            <button onclick="switchMode('flaccid')" id="btn-mode-flaccid" class="w-24 px-6 py-2 rounded-md text-sm font-bold transition-all text-white/50 hover:text-white text-center">
+                FLACCID
+            </button>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto p-4 md:p-8 space-y-8">
+
+        <section id="info-card" class="glass-panel bg-white/5 rounded-2xl p-6 border-l-4 border-sky-500 transition-all duration-300">
+            <h2 class="text-lg font-bold mb-4 uppercase tracking-wider" id="info-title">
+                Hypertrophy Protocol
+            </h2>
+            <div class="grid grid-cols-2 gap-4 text-sm opacity-80" id="info-grid">
+                </div>
+        </section>
+
+        <section class="relative bg-white/5 rounded-3xl p-8 border border-white/10 shadow-2xl overflow-hidden">
+            
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <span class="block text-xs uppercase tracking-widest opacity-50">Set Progress</span>
+                    <div class="text-3xl font-black" id="set-display">SET 1 / 3</div>
+                </div>
+                <div class="text-right">
+                    <span class="block text-xs uppercase tracking-widest opacity-50">Repetition</span>
+                    <div class="text-4xl font-black" id="rep-display">0 / 8</div>
+                </div>
+            </div>
+
+            <div class="relative h-64 flex flex-col items-center justify-center mb-8">
+                
+                <div class="z-10 text-center relative">
+                    <div class="text-6xl md:text-8xl font-mono font-bold tracking-tighter" id="timer-display">00:00</div>
+                    <div class="text-xl font-bold uppercase tracking-widest mt-2" id="phase-label">READY</div>
+                </div>
+
+                <div class="absolute inset-0 bg-black/20 rounded-2xl overflow-hidden" id="progress-container">
+                    <div id="progress-bar" class="bg-sky-600"></div>
+                </div>
+
+                <div id="breathing-guide" class="absolute inset-0 flex items-center justify-center hidden pointer-events-none z-0">
+                    <div class="w-64 h-64 rounded-full border-4 border-blue-400/30 breathing-circle flex items-end justify-center pb-6">
+                        <span class="text-xl font-bold uppercase tracking-widest text-blue-300">REST</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+                <button id="btn-start" onclick="toggleTimer()" class="w-full py-4 rounded-xl font-bold text-xl bg-white text-stone-900 hover:bg-stone-200 transition shadow-lg tracking-widest uppercase">
+                    START
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="resetSession()" class="flex-1 py-3 rounded-xl font-bold text-sm bg-white/10 hover:bg-white/20 transition tracking-widest">
+                        RESET
+                    </button>
+                    <button onclick="toggleAudio()" id="btn-audio" class="flex-1 py-3 rounded-xl font-bold text-sm bg-white/10 hover:bg-white/20 transition tracking-widest">
+                        AUDIO: ON
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script>
+        // --- CONFIGURATION ---
+        const PROTOCOLS = {
+            hard: {
+                title: 'Hypertrophy Protocol',
+                grid: [
+                    'Pos: <strong>Standing Upright</strong>',
+                    'Action: <strong>Max Squeeze (10s)</strong>',
+                    'Rest: <strong>15s</strong>',
+                    'Vol: <strong>8 Reps x 3 Sets</strong>'
+                ],
+                repsPerSet: 8,
+                squeezeTime: 10,
+                restTime: 15,
+                setRestTime: 120, // 2 mins
+                setsTotal: 3
+            },
+            flaccid: {
+                title: 'Endurance protocol',
+                grid: [
+                    'Pos: <strong>Lying Down</strong>',
+                    'Action: <strong>Squeeze (5s)</strong>',
+                    'Rest: <strong>5s</strong>',
+                    'Vol: <strong>10 Reps x 3 Sets</strong>'
+                ],
+                repsPerSet: 10,
+                squeezeTime: 5,
+                restTime: 5,
+                setRestTime: 60, // 1 min
+                setsTotal: 3
+            }
+        };
+
+        // --- STATE ---
+        let currentMode = 'hard';
+        let state = 'IDLE'; // IDLE, SQUEEZE, REST, SET_REST, FINISHED
+        let isPaused = false;
+        let currentRep = 0;
+        let currentSet = 1;
+        let timeLeft = 0;
+        let timerInterval = null;
+        let audioEnabled = true;
+        let lastBeepTime = -1; 
+
+        // --- AUDIO ENGINE ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        // 核心发声函数（复刻 Stamina 的基础 playTone）
+        function playTone(freq, type, duration, vol = 1.0) {
+            if (!audioEnabled) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = type; // Stamina 主要使用 'triangle'
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        /* --- 按钮交互专属音效 (复刻 STAMINA) --- */
+        function uiBeepStart() { 
+            // 复刻 Stamina SFX.start: 强力上升音
+            playTone(440, 'triangle', 0.1, 0.8); 
+            setTimeout(() => playTone(554, 'triangle', 0.1, 0.8), 100);
+            setTimeout(() => playTone(659, 'triangle', 0.3, 1.0), 200);
+        }
+        function uiBeepPause() { 
+            // 复刻 Stamina SFX.click: 普通点击
+            playTone(600, 'triangle', 0.05, 0.4); 
+        }
+        function uiBeepResume() { 
+            // 复刻 Stamina SFX.click: 普通点击
+            playTone(600, 'triangle', 0.05, 0.4); 
+        }
+        function uiBeepReset() { 
+            // 复刻 Stamina SFX.click: 普通点击
+            playTone(600, 'triangle', 0.05, 0.4); 
+        }
+
+        /* --- 阶段自动切换音效 --- */
+        function beepPhaseAction() { playTone(600, 'triangle', 0.15, 0.8); } 
+        function beepPhaseRest() { playTone(300, 'triangle', 0.3, 0.8); } 
+        function beepCountdown() { playTone(880, 'triangle', 0.1, 0.5); } // 复刻 Stamina SFX.tick
+        function beepFinish() { 
+            // 复刻 Stamina SFX.end: 强力下降音
+            playTone(659, 'triangle', 0.1, 1.0);
+            setTimeout(() => playTone(329, 'triangle', 0.4, 1.0), 100);
+        }
+
+        // --- UI FUNCTIONS ---
+        function switchMode(mode) {
+            resetSession(false); // 不播放reset音效
+            currentMode = mode;
+            const p = PROTOCOLS[mode];
+
+            const btnHard = document.getElementById('btn-mode-hard');
+            const btnFlaccid = document.getElementById('btn-mode-flaccid');
+
+            if (mode === 'hard') {
+                document.body.className = "bg-slate-50 text-slate-900";
+                btnHard.className = "w-24 px-6 py-2 rounded-md text-sm font-bold transition-all bg-sky-600 text-white shadow-lg text-center";
+                btnFlaccid.className = "w-24 px-6 py-2 rounded-md text-sm font-bold transition-all text-white/50 hover:text-white text-center";
+                document.getElementById('info-card').className = "glass-panel bg-white/5 rounded-2xl p-6 border-l-4 border-sky-500 transition-all duration-300";
+                document.getElementById('progress-bar').className = "bg-sky-600";
+            } else {
+                document.body.className = "bg-slate-50 text-slate-900";
+                btnHard.className = "w-24 px-6 py-2 rounded-md text-sm font-bold transition-all text-slate-400 hover:text-slate-600 text-center";
+                btnFlaccid.className = "w-24 px-6 py-2 rounded-md text-sm font-bold transition-all bg-blue-500 text-white shadow-lg text-center";
+                document.getElementById('info-card').className = "glass-panel bg-white rounded-2xl p-6 border-l-4 border-blue-500 shadow-sm transition-all duration-300";
+                document.getElementById('progress-bar').className = "bg-blue-500";
+            }
+
+            document.getElementById('info-title').innerText = p.title;
+            const gridHTML = p.grid.map(item => `<div>${item}</div>`).join('');
+            document.getElementById('info-grid').innerHTML = gridHTML;
+
+            document.getElementById('rep-display').innerText = `0 / ${p.repsPerSet}`;
+            document.getElementById('set-display').innerText = `SET 1 / ${p.setsTotal}`;
+        }
+
+        function toggleTimer() {
+            const btn = document.getElementById('btn-start');
+            
+            // 首次启动或结束后重启
+            if (state === 'IDLE' || state === 'FINISHED') {
+                uiBeepStart(); 
+                isPaused = false;
+                startPhase('SQUEEZE', false); 
+                btn.innerHTML = 'PAUSE';
+            } 
+            // 触发暂停
+            else if (!isPaused) {
+                uiBeepPause(); 
+                clearInterval(timerInterval);
+                isPaused = true;
+                btn.innerHTML = 'RESUME';
+                document.getElementById('phase-label').innerText += " (PAUSED)";
+                
+                // 冻结进度条
+                if (state === 'SQUEEZE') {
+                    const bar = document.getElementById('progress-bar');
+                    const computedWidth = window.getComputedStyle(bar).width;
+                    bar.style.transition = 'none';
+                    bar.style.width = computedWidth;
+                }
+                
+                // 冻结呼吸动画
+                if (state === 'REST') {
+                    document.querySelector('.breathing-circle').style.animationPlayState = 'paused';
+                }
+            } 
+            // 触发恢复
+            else {
+                uiBeepResume(); 
+                isPaused = false;
+                btn.innerHTML = 'PAUSE';
+                
+                if (state === 'SQUEEZE') {
+                    document.getElementById('phase-label').innerText = currentMode === 'hard' ? "MAX SQUEEZE" : "SQUEEZE";
+                    const bar = document.getElementById('progress-bar');
+                    void bar.offsetWidth; 
+                    bar.style.transition = `width ${timeLeft}s linear`;
+                    bar.style.width = '0%';
+                } else if (state === 'REST') {
+                    document.getElementById('phase-label').innerText = "";
+                    document.querySelector('.breathing-circle').style.animationPlayState = 'running';
+                } else if (state === 'SET_REST') {
+                    document.getElementById('phase-label').innerText = "LONG BREAK";
+                }
+                
+                timerInterval = setInterval(timerTick, 1000);
+            }
+        }
+
+        function timerTick() {
+            timeLeft--;
+            updateTimerDisplay();
+
+            // 最后3秒读秒音效
+            if (state === 'SQUEEZE' && audioEnabled && timeLeft <= 3 && timeLeft > 0) {
+                if (lastBeepTime !== timeLeft) {
+                    beepCountdown();
+                    lastBeepTime = timeLeft;
+                }
+            }
+
+            if (timeLeft <= 0) {
+                nextPhase();
+            }
+        }
+
+        function startPhase(newPhase, playSound = true) {
+            clearInterval(timerInterval);
+            state = newPhase;
+            isPaused = false;
+            
+            const p = PROTOCOLS[currentMode];
+            const bar = document.getElementById('progress-bar');
+            const progressContainer = document.getElementById('progress-container');
+            const label = document.getElementById('phase-label');
+            const breathing = document.getElementById('breathing-guide');
+
+            lastBeepTime = -1;
+
+            if (newPhase === 'SQUEEZE') {
+                progressContainer.style.display = 'block';
+                breathing.classList.add('hidden');
+                
+                timeLeft = p.squeezeTime;
+                
+                label.innerText = currentMode === 'hard' ? "MAX SQUEEZE" : "SQUEEZE";
+                label.className = currentMode === 'hard' ? "text-xl font-bold uppercase tracking-widest mt-2 text-sky-500" : "text-xl font-bold uppercase tracking-widest mt-2 text-blue-600";
+                
+                bar.style.transition = 'none';
+                bar.style.width = '100%';
+                void bar.offsetWidth; 
+                
+                bar.style.transition = `width ${timeLeft}s linear`;
+                bar.style.width = '0%';
+                
+                if (playSound) beepPhaseAction();
+            } 
+            else if (newPhase === 'REST') {
+                progressContainer.style.display = 'none';
+                breathing.classList.remove('hidden');
+                document.querySelector('.breathing-circle').style.animationPlayState = 'running';
+                
+                timeLeft = p.restTime;
+                
+                label.innerText = "";
+                label.className = "text-xl font-bold uppercase tracking-widest mt-2 opacity-50";
+                
+                if (playSound) beepPhaseRest();
+            }
+            else if (state === 'SET_REST') {
+                progressContainer.style.display = 'none';
+                breathing.classList.add('hidden');
+                
+                timeLeft = p.setRestTime;
+                label.innerText = "LONG BREAK";
+                label.className = "text-xl font-bold uppercase tracking-widest mt-2 opacity-50";
+                if (playSound) beepFinish();
+            }
+
+            updateTimerDisplay();
+            timerInterval = setInterval(timerTick, 1000);
+        }
+
+        function nextPhase() {
+            const p = PROTOCOLS[currentMode];
+
+            if (state === 'SQUEEZE') {
+                currentRep++;
+                document.getElementById('rep-display').innerText = `${currentRep} / ${p.repsPerSet}`;
+                
+                if (currentRep >= p.repsPerSet) {
+                    if (currentSet >= p.setsTotal) {
+                        finishSession();
+                    } else {
+                        startPhase('SET_REST');
+                    }
+                } else {
+                    startPhase('REST');
+                }
+            } 
+            else if (state === 'REST') {
+                startPhase('SQUEEZE');
+            }
+            else if (state === 'SET_REST') {
+                currentSet++;
+                currentRep = 0;
+                document.getElementById('set-display').innerText = `SET ${currentSet} / ${p.setsTotal}`;
+                document.getElementById('rep-display').innerText = `0 / ${p.repsPerSet}`;
+                startPhase('SQUEEZE');
+            }
+        }
+
+        function finishSession() {
+            clearInterval(timerInterval);
+            state = 'FINISHED';
+            isPaused = false;
+            document.getElementById('phase-label').innerText = "SESSION COMPLETE";
+            document.getElementById('phase-label').className = "text-xl font-bold uppercase tracking-widest mt-2 opacity-80";
+            document.getElementById('timer-display').innerText = "DONE";
+            document.getElementById('btn-start').innerHTML = "COMPLETED";
+            
+            document.getElementById('progress-container').style.display = 'none';
+            document.getElementById('breathing-guide').classList.add('hidden');
+            beepFinish();
+        }
+
+        function resetSession(playAudio = true) {
+            if (state !== 'IDLE' && playAudio) {
+                uiBeepReset();
+            }
+            
+            clearInterval(timerInterval);
+            state = 'IDLE';
+            isPaused = false;
+            currentRep = 0;
+            currentSet = 1;
+            timeLeft = 0;
+            lastBeepTime = -1;
+            
+            const p = PROTOCOLS[currentMode];
+            document.getElementById('rep-display').innerText = `0 / ${p.repsPerSet}`;
+            document.getElementById('set-display').innerText = `SET 1 / ${p.setsTotal}`;
+            document.getElementById('timer-display').innerText = "00:00";
+            document.getElementById('phase-label').innerText = "READY";
+            document.getElementById('phase-label').className = "text-xl font-bold uppercase tracking-widest mt-2";
+            document.getElementById('btn-start').innerHTML = "START";
+            
+            const bar = document.getElementById('progress-bar');
+            const progressContainer = document.getElementById('progress-container');
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+            progressContainer.style.display = 'block';
+            document.getElementById('breathing-guide').classList.add('hidden');
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            document.getElementById('timer-display').innerText = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            document.getElementById('btn-audio').innerText = audioEnabled ? "AUDIO: ON" : "AUDIO: OFF";
+        }
+
+        // Initialize
+        switchMode('hard');
+    </script>
+</body>
+</html>
