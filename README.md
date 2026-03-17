@@ -3,6 +3,7 @@ https://github.com/tomatomash <br>
 https://tomatomash.github.io/tomatomash/ <br>
 https://tomatomash.github.io/Premium-monitor/ <br>
 https://tomatomash.github.io/fund-monitor-report/ <br>
+https://tomatomash.github.io/fund-purchase-mode-in-out-/ <br>
 <!--
 **tomatomash/tomatomash** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
