@@ -79,10 +79,10 @@
                     ...kneeActivation,
                     // 1. 深蹲 (3 Sets)
                     { name: "Squat", target: "10 Reps", rhythm: "3s Down / 2s Hold / 1s Up", rest: 60, totalTime: 60, type: "3 SETS", sets: 3 },
-                    // 2. 罗马尼亚硬拉 (3 Sets) - 调整至第二位
+                    // 2. 罗马尼亚硬拉 (3 Sets)
                     { name: "Romanian Deadlift", target: "10 Reps", rhythm: "3s Down / 0s Hold / 1s Up", rest: 45, totalTime: 40, type: "3 SETS", sets: 3 },
-                    // 3. 俯身划船 (3 Sets) - 新增动作
-                    { name: "Bent-Over Row", target: "10 Reps", rhythm: "2s Down / 0s Hold / 1s Up", rest: 60, totalTime: 40, type: "3 SETS", sets: 3 },
+                    // 3. 俯身划船 (3 Sets) - 计时 set 40s，休息 1min
+                    { name: "Bent-Over Row", target: "40s", rhythm: "2s Down / 0s Hold / 1s Up", rest: 60, totalTime: 40, type: "3 SETS", sets: 3 },
                     // 4. 实力推 (3 Sets)
                     { name: "Standing Press", target: "10 Reps", rhythm: "2s Down / 0s Hold / 1s Up", rest: 45, totalTime: 30, type: "3 SETS", sets: 3 },
                     // 5. 弯举 (3 Sets)
@@ -145,8 +145,10 @@
                 const firstCircuitIdx = circuitIndices[0];
                 const lastCircuitIdx = circuitIndices[circuitIndices.length - 1];
 
+                // 修改：去除了 non-circuit 下的 (Next Set) 提示
                 if (currentSet < currentEx.sets && (currentEx.type === 'activation' || currentEx.type === '3 SETS')) {
-                    return `${currentEx.name} (Next Set)`;
+                    // return `${currentEx.name} (Next Set)`; // 原来的
+                    return currentEx.name; // 修改后的
                 }
                 
                 if (currentEx.type === 'circuit') {
@@ -313,6 +315,7 @@
                     <main className="flex-1 p-6 flex flex-col items-center">
                         <div className="w-full max-w-md text-center">
                             <div className="mb-6">
+                                {/* 正在进行中的运动名称 (3xl) */}
                                 <h2 className="text-3xl font-black text-emerald-400 leading-tight">{currentEx.name}</h2>
                                 <p className="text-sm text-slate-400 font-medium mt-1">{currentEx.rhythm}</p>
                             </div>
@@ -334,8 +337,10 @@
                                         {isRunning ? "Pause" : "Start"}
                                     </button>
                                 </div>
-                                <button onClick={() => handleAction(() => advanceExercise(true))} className="w-full flex items-center justify-center gap-1 text-slate-500 font-medium text-sm py-4 hover:text-white transition-colors">
-                                    Skip to next: <span className="font-bold text-slate-300 ml-1">{getNextExName()}</span> <IconSkip />
+                                {/* === [UI CHANGE: Skip/Next Button] === */}
+                                {/* 修改：字号调整为 2xl，白色字体，Next: 提示文本，去除两行，加粗动作名 */}
+                                <button onClick={() => handleAction(() => advanceExercise(true))} className="w-full flex items-center justify-center gap-2 text-white font-medium text-2xl py-4 transition-all opacity-80 hover:opacity-100">
+                                    Next: <span className="font-black">{getNextExName()}</span> <IconSkip />
                                 </button>
                             </div>
 
