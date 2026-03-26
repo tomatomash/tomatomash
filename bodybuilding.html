@@ -77,15 +77,10 @@
                 id: 'A', title: "Day A: Strength", icon: <IconDumbbell />, color: "bg-blue-600",
                 exercises: [
                     ...kneeActivation,
-                    // 1. 深蹲 (3 Sets)
                     { name: "Squat", target: "10 Reps", rhythm: "3s Down / 2s Hold / 1s Up", rest: 60, totalTime: 60, type: "3 SETS", sets: 3 },
-                    // 2. 罗马尼亚硬拉 (3 Sets)
                     { name: "Romanian Deadlift", target: "10 Reps", rhythm: "3s Down / 0s Hold / 1s Up", rest: 45, totalTime: 40, type: "3 SETS", sets: 3 },
-                    // 3. 俯身划船 (3 Sets) - 计时 set 40s，休息 1min
                     { name: "Bent-Over Row", target: "40s", rhythm: "2s Down / 0s Hold / 1s Up", rest: 60, totalTime: 40, type: "3 SETS", sets: 3 },
-                    // 4. 实力推 (3 Sets)
                     { name: "Standing Press", target: "10 Reps", rhythm: "2s Down / 0s Hold / 1s Up", rest: 45, totalTime: 30, type: "3 SETS", sets: 3 },
-                    // 5. 弯举 (3 Sets)
                     { name: "Barbell Curl", target: "20 Reps", rhythm: "Power Burst / High Volume", rest: 60, totalTime: 40, type: "3 SETS", sets: 3 }
                 ]
             },
@@ -114,6 +109,38 @@
             const [totalTime, setTotalTime] = React.useState(0);
             const [isRunning, setIsRunning] = React.useState(false);
             const [soundMuted, setSoundMuted] = React.useState(false);
+
+            // --------------------------------------------------------
+            // [NEW MODULE: SCREEN WAKE LOCK - PREVENT BLACK SCREEN]
+            // --------------------------------------------------------
+            const wakeLock = React.useRef(null);
+            const requestWakeLock = async () => {
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock.current = await navigator.wakeLock.request('screen');
+                    }
+                } catch (err) {
+                    console.warn("Wake Lock request failed:", err.message);
+                }
+            };
+            const releaseWakeLock = () => {
+                if (wakeLock.current !== null) {
+                    wakeLock.current.release().then(() => { wakeLock.current = null; });
+                }
+            };
+            React.useEffect(() => {
+                if (isRunning) { requestWakeLock(); } else { releaseWakeLock(); }
+                const handleVisibilityChange = () => {
+                    if (wakeLock.current !== null && document.visibilityState === 'visible') { requestWakeLock(); }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                return () => {
+                    releaseWakeLock();
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                };
+            }, [isRunning]);
+            // [END OF WAKE LOCK MODULE]
+            // --------------------------------------------------------
 
             const currentEx = activePlan?.exercises[exIdx];
             const totalEx = activePlan?.exercises.length || 0;
@@ -145,10 +172,8 @@
                 const firstCircuitIdx = circuitIndices[0];
                 const lastCircuitIdx = circuitIndices[circuitIndices.length - 1];
 
-                // 修改：去除了 non-circuit 下的 (Next Set) 提示
                 if (currentSet < currentEx.sets && (currentEx.type === 'activation' || currentEx.type === '3 SETS')) {
-                    // return `${currentEx.name} (Next Set)`; // 原来的
-                    return currentEx.name; // 修改后的
+                    return currentEx.name; 
                 }
                 
                 if (currentEx.type === 'circuit') {
@@ -315,7 +340,6 @@
                     <main className="flex-1 p-6 flex flex-col items-center">
                         <div className="w-full max-w-md text-center">
                             <div className="mb-6">
-                                {/* 正在进行中的运动名称 (3xl) */}
                                 <h2 className="text-3xl font-black text-emerald-400 leading-tight">{currentEx.name}</h2>
                                 <p className="text-sm text-slate-400 font-medium mt-1">{currentEx.rhythm}</p>
                             </div>
@@ -337,8 +361,6 @@
                                         {isRunning ? "Pause" : "Start"}
                                     </button>
                                 </div>
-                                {/* === [UI CHANGE: Skip/Next Button] === */}
-                                {/* 修改：字号调整为 2xl，白色字体，Next: 提示文本，去除两行，加粗动作名 */}
                                 <button onClick={() => handleAction(() => advanceExercise(true))} className="w-full flex items-center justify-center gap-2 text-white font-medium text-2xl py-4 transition-all opacity-80 hover:opacity-100">
                                     Next: <span className="font-black">{getNextExName()}</span> <IconSkip />
                                 </button>
