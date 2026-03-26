@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -467,6 +467,48 @@
 
         // Initialize
         switchMode('hard');
+
+        // ========================================================
+        // [NEW MODULE: SCREEN WAKE LOCK - PREVENT BLACK SCREEN]
+        // ========================================================
+        (function() {
+            let wakeLock = null;
+
+            const requestWakeLock = async () => {
+                if ('wakeLock' in navigator && wakeLock === null) {
+                    try {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                    } catch (err) {
+                        console.warn("Wake Lock request failed:", err.message);
+                    }
+                }
+            };
+
+            const releaseWakeLock = () => {
+                if (wakeLock !== null) {
+                    wakeLock.release().then(() => { wakeLock = null; });
+                }
+            };
+
+            // 每秒轮询当前状态，若 timer 正在运行且未暂停，则请求锁定
+            setInterval(() => {
+                const isTimerActive = (state !== 'IDLE' && state !== 'FINISHED' && !isPaused);
+                if (isTimerActive) {
+                    requestWakeLock();
+                } else {
+                    releaseWakeLock();
+                }
+            }, 1000);
+
+            // 处理页面切换回来的情况
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && (state !== 'IDLE' && state !== 'FINISHED' && !isPaused)) {
+                    requestWakeLock();
+                }
+            });
+        })();
+        // [END OF WAKE LOCK MODULE]
+        // ========================================================
     </script>
 </body>
 </html>
