@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Project Time Tracker</title>
+    <style>
+        /* --- 全局色彩与变量定义 --- */
+        :root {
+            --bg-color: #f4f7f9;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --primary: #0096fa;
+            --primary-hover: #0077c8;
+            --danger: #ff4d4f;
+            --danger-hover: #d9363e;
+            --action-bg: #edf2f7;
+            --action-hover: #e2e8f0;
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-main);
+            box-sizing: border-box;
+        }
+
+        .app-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            padding-bottom: 40px;
+        }
+
+        /* --- 顶部控制区域 --- */
+        .top-card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .input-wrapper {
+            flex-grow: 1;
+            margin-right: 20px;
+        }
+
+        #taskInput {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        #taskInput:focus { border-color: var(--primary); }
+        #taskInput::placeholder { color: #a0aec0; }
+
+        .controls-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .timer-display {
+            font-size: 22px;
+            font-weight: 600;
+            font-family: 'Courier New', Courier, monospace;
+            min-width: 105px;
+            text-align: right;
+            color: var(--text-main);
+        }
+
+        .btn {
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn:active { transform: scale(0.97); }
+
+        .btn-main {
+            background-color: var(--primary);
+            color: white;
+            padding: 0 24px;
+            height: 44px;
+            font-size: 14px;
+            min-width: 90px;
+        }
+        .btn-main:hover { background-color: var(--primary-hover); }
+        .btn-main.stop-mode { background-color: var(--danger); }
+        .btn-main.stop-mode:hover { background-color: var(--danger-hover); }
+
+        .btn-clear {
+            background-color: var(--action-bg);
+            color: var(--text-muted);
+            padding: 0 16px;
+            height: 44px;
+            font-size: 13px;
+        }
+        .btn-clear:hover { background-color: var(--action-hover); color: var(--text-main); }
+
+        /* --- 任务列表区域 --- */
+        .list-card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+        }
+
+        .list-header {
+            background-color: #f8fafc;
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        #todayTotal {
+            font-size: 15px;
+            color: var(--text-main);
+            font-weight: 700;
+            margin-left: 8px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .entry {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        .entry:last-child { border-bottom: none; }
+        .entry:hover { background-color: #f8fafc; }
+        .entry.active { background-color: #ebf8ff; }
+
+        .entry-name {
+            flex-grow: 1;
+            font-size: 15px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 20px;
+        }
+
+        .entry-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .entry-time {
+            font-weight: 600;
+            font-size: 16px;
+            font-family: 'Courier New', Courier, monospace;
+            min-width: 85px;
+            text-align: right;
+            color: var(--text-main);
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            color: #cbd5e0;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+        .btn-icon:hover:not(:disabled) { color: var(--primary); }
+        .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .btn-small {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .btn-small:hover { background-color: var(--action-bg); color: var(--text-main); }
+        .btn-delete:hover { background-color: #fff5f5; color: var(--danger); border-color: #feb2b2; }
+
+        /* --- 导出按钮区域 --- */
+        .export-container {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+        }
+
+        .btn-export {
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 10px 30px;
+            font-size: 14px;
+            border-radius: 20px; /* 椭圆形按钮 */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            transition: all 0.2s ease;
+        }
+
+        .btn-export:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            box-shadow: 0 4px 12px rgba(0, 150, 250, 0.1);
+        }
+
+        /* --- 响应式布局 --- */
+        @media (max-width: 650px) {
+            body { padding: 10px; }
+            .top-card { flex-direction: column; align-items: stretch; padding: 15px; }
+            .input-wrapper { margin-right: 0; margin-bottom: 15px; }
+            .controls-wrapper { justify-content: space-between; width: 100%; }
+            .timer-display { font-size: 20px; }
+            .entry { flex-direction: column; align-items: flex-start; padding: 15px; }
+            .entry-name { margin-right: 0; margin-bottom: 12px; width: 100%; white-space: normal; }
+            .entry-actions { width: 100%; justify-content: flex-end; background-color: #f8fafc; padding: 8px; border-radius: var(--radius-md); box-sizing: border-box; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-wrapper">
+        <div class="top-card">
+            <div class="input-wrapper">
+                <input type="text" id="taskInput" placeholder="What are you working on?">
+            </div>
+            <div class="controls-wrapper">
+                <div id="mainTimer" class="timer-display">00:00:00</div>
+                <button id="mainBtn" class="btn btn-main" onclick="toggleMainTimer()">START</button>
+                <button class="btn btn-clear" onclick="clearAllData()">CLEAR ALL</button>
+            </div>
+        </div>
+
+        <div class="list-card">
+            <div class="list-header">
+                <span>Today's Tasks</span>
+                <span>Total: <span id="todayTotal">00:00:00</span></span>
+            </div>
+            <div id="entryList">
+                </div>
+        </div>
+
+        <div class="export-container">
+            <button id="exportBtn" class="btn btn-export" onclick="exportToClipboard()">Export Table to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let activeEntryId = null;
+        let timerInterval = null;
+        let entries = [];
+        
+        const CACHE_KEY = 'clockify_clone_cache_v3';
+        const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; 
+
+        const taskInput = document.getElementById('taskInput');
+        const mainTimer = document.getElementById('mainTimer');
+        const mainBtn = document.getElementById('mainBtn');
+        const entryList = document.getElementById('entryList');
+        const todayTotal = document.getElementById('todayTotal');
+
+        function init() {
+            loadFromCache();
+            if (isRunning && activeEntryId) {
+                mainBtn.textContent = 'STOP';
+                mainBtn.classList.add('stop-mode');
+                timerInterval = setInterval(updateClock, 1000);
+            }
+            renderEntries();
+        }
+
+        function saveToCache() {
+            const cacheData = {
+                timestamp: Date.now(),
+                entries: entries,
+                activeEntryId: activeEntryId,
+                isRunning: isRunning
+            };
+            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+        }
+
+        function loadFromCache() {
+            const cachedString = localStorage.getItem(CACHE_KEY);
+            if (cachedString) {
+                const cacheData = JSON.parse(cachedString);
+                const now = Date.now();
+                if (now - cacheData.timestamp > CACHE_EXPIRY_MS) {
+                    localStorage.removeItem(CACHE_KEY);
+                    return;
+                }
+                entries = cacheData.entries || [];
+                activeEntryId = cacheData.activeEntryId;
+                isRunning = cacheData.isRunning;
+
+                if (isRunning && activeEntryId) {
+                    let activeEntry = entries.find(e => e.id === activeEntryId);
+                    if (activeEntry) {
+                        taskInput.value = activeEntry.name;
+                    }
+                }
+            }
+        }
+
+        function clearAllData() {
+            if (confirm("Are you sure you want to clear all data? This cannot be undone.")) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                activeEntryId = null;
+                entries = [];
+                
+                mainBtn.textContent = 'START';
+                mainBtn.classList.remove('stop-mode');
+                taskInput.value = '';
+                mainTimer.textContent = '00:00:00';
+                
+                localStorage.removeItem(CACHE_KEY);
+                renderEntries();
+            }
+        }
+
+        function formatTime(ms) {
+            let totalSeconds = Math.floor(ms / 1000);
+            let h = Math.floor(totalSeconds / 3600);
+            let m = Math.floor((totalSeconds % 3600) / 60);
+            let s = totalSeconds % 60;
+            return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+        }
+
+        // --- 核心优化 1：自动递增的默认命名逻辑 ---
+        function getDefaultProjectName() {
+            let maxNum = 0;
+            // 正则匹配 "Default Project 1", "Default Project 2" 等
+            const regex = /^Default Project (\d+)$/i; 
+            
+            entries.forEach(e => {
+                const match = e.name.match(regex);
+                if (match) {
+                    const num = parseInt(match[1], 10);
+                    if (num > maxNum) maxNum = num;
+                }
+            });
+            // 自动赋予下一个编号
+            return `Default Project ${maxNum + 1}`;
+        }
+
+        // --- 核心优化 2：分离“精准时间更新”与“全局列表渲染” ---
+        
+        // 计算当天所有的总毫秒数
+        function getDailyTotalMs() {
+            return entries.reduce((total, e) => {
+                let isThisRunning = (isRunning && activeEntryId === e.id);
+                let currentSessionMs = isThisRunning ? (Date.now() - e.lastStart) : 0;
+                return total + e.totalMs + currentSessionMs;
+            }, 0);
+        }
+
+        // updateClock 现在【只】更新数字文本，不销毁重建 HTML，彻底解决悬浮闪烁问题
+        function updateClock() {
+            if (!isRunning) return;
+            
+            let entry = entries.find(e => e.id === activeEntryId);
+            if (!entry) return;
+
+            let currentSessionMs = Date.now() - entry.lastStart;
+            let displayTotalMs = entry.totalMs + currentSessionMs;
+
+            // 更新顶部的总时间
+            mainTimer.textContent = formatTime(displayTotalMs);
+
+            // 仅通过 ID 精准找到列表里那个在跑的时间文本，进行替换
+            let rowTimeEl = document.getElementById('time-' + activeEntryId);
+            if (rowTimeEl) {
+                rowTimeEl.textContent = formatTime(displayTotalMs);
+            }
+
+            // 更新总计时间
+            todayTotal.textContent = formatTime(getDailyTotalMs());
+        }
+
+        function toggleMainTimer() {
+            if (isRunning) {
+                stopTimer();
+            } else {
+                startTimer(null); 
+            }
+        }
+
+        function startTimer(existingId) {
+            if (isRunning) stopTimer(); 
+
+            let now = Date.now(); 
+            isRunning = true;
+            mainBtn.textContent = 'STOP';
+            mainBtn.classList.add('stop-mode');
+
+            if (existingId) {
+                activeEntryId = existingId;
+                let entry = entries.find(e => e.id === existingId);
+                entry.lastStart = now;      
+                taskInput.value = entry.name; 
+            } else {
+                activeEntryId = now; 
+                // 获取输入框内容，如果为空，则调用自动递增命名函数
+                let taskName = taskInput.value.trim() || getDefaultProjectName();
+                
+                entries.unshift({    
+                    id: activeEntryId,
+                    name: taskName,
+                    totalMs: 0,      
+                    lastStart: now   
+                });
+            }
+
+            saveToCache(); 
+            timerInterval = setInterval(updateClock, 1000);
+            renderEntries(); // 结构改变（开始计时，需要加上蓝色高亮），全量渲染一次
+            updateClock(); 
+        }
+
+        function stopTimer() {
+            if (!isRunning) return;
+
+            clearInterval(timerInterval);
+            isRunning = false;
+            
+            mainBtn.textContent = 'START';
+            mainBtn.classList.remove('stop-mode');
+
+            let entry = entries.find(e => e.id === activeEntryId);
+            if (entry) {
+                entry.totalMs += (Date.now() - entry.lastStart);
+            }
+
+            taskInput.value = '';
+            mainTimer.textContent = '00:00:00';
+            activeEntryId = null;
+
+            saveToCache();
+            renderEntries(); // 结构改变（停止计时，去掉高亮），全量渲染一次
+        }
+
+        function renameEntry(id) {
+            let entry = entries.find(e => e.id === id);
+            if (!entry) return;
+
+            let newName = prompt("Rename task:", entry.name);
+            if (newName !== null && newName.trim() !== "") {
+                entry.name = newName.trim();
+                if (isRunning && activeEntryId === id) {
+                    taskInput.value = entry.name;
+                }
+                saveToCache();
+                renderEntries(); // 名字改变，全量渲染一次
+            }
+        }
+
+        function deleteEntry(id) {
+            if (confirm("Delete this entry?")) {
+                if (isRunning && activeEntryId === id) {
+                    stopTimer();
+                }
+                entries = entries.filter(e => e.id !== id);
+                saveToCache();
+                renderEntries(); // 列表结构改变，全量渲染一次
+            }
+        }
+
+        function renderEntries() {
+            entryList.innerHTML = '';
+
+            if (entries.length === 0) {
+                entryList.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 14px;">No tracked tasks yet. Type above and click START.</div>';
+                todayTotal.textContent = '00:00:00';
+                return;
+            }
+
+            entries.forEach(entry => {
+                let isThisRunning = (isRunning && activeEntryId === entry.id);
+                let currentSessionMs = isThisRunning ? (Date.now() - entry.lastStart) : 0;
+                let displayTotalMs = entry.totalMs + currentSessionMs;
+                
+                let row = document.createElement('div');
+                row.className = `entry ${isThisRunning ? 'active' : ''}`;
+                
+                // 注意这里给显示时间的 div 加上了唯一的 ID: id="time-${entry.id}"
+                row.innerHTML = `
+                    <div class="entry-name" title="${entry.name}">${entry.name}</div>
+                    <div class="entry-actions">
+                        <div class="entry-time" id="time-${entry.id}">${formatTime(displayTotalMs)}</div>
+                        <button class="btn btn-icon" onclick="startTimer(${entry.id})" ${isThisRunning ? 'disabled' : ''} title="Resume tracking">
+                            ▶
+                        </button>
+                        <button class="btn btn-small" onclick="renameEntry(${entry.id})">Rename</button>
+                        <button class="btn btn-small btn-delete" onclick="deleteEntry(${entry.id})">Delete</button>
+                    </div>
+                `;
+                entryList.appendChild(row);
+            });
+
+            todayTotal.textContent = formatTime(getDailyTotalMs());
+        }
+
+        // --- 核心优化 3：导出为表格格式 (TSV) 复制到剪贴板 ---
+        function exportToClipboard() {
+            if (entries.length === 0) {
+                alert("No tasks to export!");
+                return;
+            }
+
+            // 构建带有制表符(\t)和换行符(\n)的字符串，Excel和表格软件会自动识别为列和行
+            let exportString = "Task Name\tDuration\n";
+            
+            entries.forEach(entry => {
+                let isThisRunning = (isRunning && activeEntryId === entry.id);
+                let currentSessionMs = isThisRunning ? (Date.now() - entry.lastStart) : 0;
+                let displayTotalMs = entry.totalMs + currentSessionMs;
+                
+                exportString += `${entry.name}\t${formatTime(displayTotalMs)}\n`;
+            });
+
+            // 调用浏览器原生 API 写入剪贴板
+            navigator.clipboard.writeText(exportString).then(() => {
+                // 提供视觉反馈，2秒后恢复原样
+                const exportBtn = document.getElementById('exportBtn');
+                const originalText = exportBtn.textContent;
+                exportBtn.textContent = "✔ Copied to Clipboard!";
+                exportBtn.style.color = "#4caf50";
+                exportBtn.style.borderColor = "#4caf50";
+                
+                setTimeout(() => {
+                    exportBtn.textContent = originalText;
+                    exportBtn.style.color = "";
+                    exportBtn.style.borderColor = "";
+                }, 2000);
+            }).catch(err => {
+                alert("Failed to copy data. Your browser might not support this feature. Error: " + err);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
