@@ -205,25 +205,28 @@
         .btn-small:hover { background-color: var(--action-bg); color: var(--text-main); }
         .btn-delete:hover { background-color: #fff5f5; color: var(--danger); border-color: #feb2b2; }
 
-        /* --- 导出按钮区域 --- */
+        /* --- 导出/导入按钮区域 --- */
         .export-container {
             text-align: center;
             margin-top: 20px;
             padding: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 15px; /* 两个按钮之间的间距 */
         }
 
-        .btn-export {
+        .btn-export, .btn-import {
             background-color: var(--card-bg);
             color: var(--text-main);
             border: 1px solid var(--border-color);
-            padding: 10px 30px;
+            padding: 10px 25px;
             font-size: 14px;
-            border-radius: 20px; /* 椭圆形按钮 */
+            border-radius: 20px; 
             box-shadow: 0 2px 10px rgba(0,0,0,0.03);
             transition: all 0.2s ease;
         }
 
-        .btn-export:hover {
+        .btn-export:hover, .btn-import:hover {
             border-color: var(--primary);
             color: var(--primary);
             box-shadow: 0 4px 12px rgba(0, 150, 250, 0.1);
@@ -239,6 +242,7 @@
             .entry { flex-direction: column; align-items: flex-start; padding: 15px; }
             .entry-name { margin-right: 0; margin-bottom: 12px; width: 100%; white-space: normal; }
             .entry-actions { width: 100%; justify-content: flex-end; background-color: #f8fafc; padding: 8px; border-radius: var(--radius-md); box-sizing: border-box; }
+            .export-container { flex-direction: column; gap: 10px; }
         }
     </style>
 </head>
@@ -266,6 +270,7 @@
         </div>
 
         <div class="export-container">
+            <button id="importBtn" class="btn btn-import" onclick="importFromClipboard()">Import Table from Clipboard</button>
             <button id="exportBtn" class="btn btn-export" onclick="exportToClipboard()">Export Table to Clipboard</button>
         </div>
     </div>
@@ -277,7 +282,8 @@
         let entries = [];
         
         const CACHE_KEY = 'clockify_clone_cache_v3';
-        const CACHE_EXPIRY_MS = 12 * 60 * 60 * 1000; 
+        // --- 需求 3：恢复 24 小时清空设定 ---
+        const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; 
 
         const taskInput = document.getElementById('taskInput');
         const mainTimer = document.getElementById('mainTimer');
@@ -526,15 +532,32 @@
             todayTotal.textContent = formatTime(getDailyTotalMs());
         }
 
-        // --- 核心优化 3：导出为表格格式 (TSV) 复制到剪贴板 ---
+        // --- 需求 1 & 导出逻辑更新：增加时间戳首行 ---
         function exportToClipboard() {
             if (entries.length === 0) {
                 alert("No tasks to export!");
                 return;
             }
 
-            // 构建带有制表符(\t)和换行符(\n)的字符串，Excel和表格软件会自动识别为列和行
-            let exportString = "Task Name\tDuration\n";
+            // 1. 生成时间戳首行: yy/mm/dd hh:min(CST)/hh:min(UTC)
+            const now = new Date();
+            const yy = now.getFullYear().toString().slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            
+            // CST (UTC+8)
+            const cstDate = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+            const cstH = String(cstDate.getUTCHours()).padStart(2, '0');
+            const cstM = String(cstDate.getUTCMinutes()).padStart(2, '0');
+            
+            // UTC
+            const utcH = String(now.getUTCHours()).padStart(2, '0');
+            const utcM = String(now.getUTCMinutes()).padStart(2, '0');
+            
+            const timestampLine = `${yy}/${mm}/${dd}  ${cstH}:${cstM}(CST)/${utcH}:${utcM}(UTC)\n`;
+
+            // 2. 构建导出字符串
+            let exportString = timestampLine + "Task Name\tDuration\n";
             
             entries.forEach(entry => {
                 let isThisRunning = (isRunning && activeEntryId === entry.id);
@@ -544,9 +567,7 @@
                 exportString += `${entry.name}\t${formatTime(displayTotalMs)}\n`;
             });
 
-            // 调用浏览器原生 API 写入剪贴板
             navigator.clipboard.writeText(exportString).then(() => {
-                // 提供视觉反馈，2秒后恢复原样
                 const exportBtn = document.getElementById('exportBtn');
                 const originalText = exportBtn.textContent;
                 exportBtn.textContent = "✔ Copied to Clipboard!";
@@ -559,9 +580,82 @@
                     exportBtn.style.borderColor = "";
                 }, 2000);
             }).catch(err => {
-                alert("Failed to copy data. Your browser might not support this feature. Error: " + err);
+                alert("Failed to copy data: " + err);
             });
         }
+
+        // [[ 新增独立封装模块：导入功能 ]] -----------------------------------------
+        /* 功能目的：从剪贴板读取数据，解析任务名和用时，追加到现有任务下方。
+           兼容性：适配带时间戳首行和不带时间戳首行的格式。
+        */
+        async function importFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (!text.trim()) {
+                    alert("Clipboard is empty!");
+                    return;
+                }
+
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
+                let importedCount = 0;
+
+                // 遍历每一行进行解析
+                lines.forEach(line => {
+                    // 过滤规则：
+                    // 1. 跳过包含 (CST)/(UTC) 的时间戳行 (需求 2 要求清除)
+                    if (line.includes("(CST)") || line.includes("(UTC)")) return;
+                    // 2. 跳过表头行
+                    if (line.toLowerCase().startsWith("task name\tduration")) return;
+
+                    // 解析任务行：按 Tab 分隔
+                    const parts = line.split('\t');
+                    if (parts.length >= 2) {
+                        const name = parts[0].trim();
+                        const durationStr = parts[1].trim(); // 格式应当是 HH:MM:SS
+
+                        // 将 HH:MM:SS 还原为毫秒数
+                        const timeParts = durationStr.split(':');
+                        if (timeParts.length === 3) {
+                            const hours = parseInt(timeParts[0], 10) || 0;
+                            const mins = parseInt(timeParts[1], 10) || 0;
+                            const secs = parseInt(timeParts[2], 10) || 0;
+                            const totalMs = (hours * 3600 + mins * 60 + secs) * 1000;
+
+                            // 需求 2：追加到现有内容下方 (数组 Push)
+                            entries.push({
+                                id: Date.now() + Math.random(), // 生成不重复的 ID
+                                name: name,
+                                totalMs: totalMs,
+                                lastStart: Date.now() // 导入时默认非运行态，但存一个时间戳备用
+                            });
+                            importedCount++;
+                        }
+                    }
+                });
+
+                if (importedCount > 0) {
+                    saveToCache();
+                    renderEntries();
+                    
+                    // 导入反馈
+                    const importBtn = document.getElementById('importBtn');
+                    const originalText = importBtn.textContent;
+                    importBtn.textContent = `✔ Imported ${importedCount} Tasks!`;
+                    importBtn.style.color = "#4caf50";
+                    importBtn.style.borderColor = "#4caf50";
+                    setTimeout(() => {
+                        importBtn.textContent = originalText;
+                        importBtn.style.color = "";
+                        importBtn.style.borderColor = "";
+                    }, 2000);
+                } else {
+                    alert("No valid task data found in clipboard. Please ensure format is 'Name [Tab] HH:MM:SS'");
+                }
+            } catch (err) {
+                alert("Failed to read clipboard: " + err);
+            }
+        }
+        // [[ 导入功能模块结束 ]] ---------------------------------------------------
 
         init();
     </script>
