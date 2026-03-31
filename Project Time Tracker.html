@@ -93,6 +93,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            box-sizing: border-box;
         }
         .btn:active { transform: scale(0.97); }
 
@@ -212,25 +213,85 @@
             padding: 10px;
             display: flex;
             justify-content: center;
-            gap: 15px; /* 两个按钮之间的间距 */
+            gap: 12px; 
+            flex-wrap: wrap; /* 手机端自动换行 */
         }
 
-        .btn-export, .btn-import {
+        .btn-export, .btn-import, .btn-import-textarea {
             background-color: var(--card-bg);
             color: var(--text-main);
             border: 1px solid var(--border-color);
-            padding: 10px 25px;
-            font-size: 14px;
+            padding: 10px 20px;
+            font-size: 13px;
             border-radius: 20px; 
             box-shadow: 0 2px 10px rgba(0,0,0,0.03);
             transition: all 0.2s ease;
         }
 
-        .btn-export:hover, .btn-import:hover {
+        .btn-export:hover, .btn-import:hover, .btn-import-textarea:hover {
             border-color: var(--primary);
             color: var(--primary);
             box-shadow: 0 4px 12px rgba(0, 150, 250, 0.1);
         }
+
+        /* [[ 新增独立样式模块：浮动弹窗 (Modal) ]] ------------------------------- */
+        .modal-overlay {
+            display: none; /* 默认隐藏 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            backdrop-filter: blur(4px); /* 背景模糊效果 */
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 500px;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .modal-header {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+            text-align: center;
+        }
+
+        #importTextarea {
+            width: 100%;
+            height: 200px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            font-size: 14px;
+            font-family: monospace;
+            resize: none;
+            outline: none;
+            box-sizing: border-box;
+            background-color: #f8fafc;
+        }
+
+        #importTextarea:focus { border-color: var(--primary); }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        /* ---------------------------------------------------------------------- */
 
         /* --- 响应式布局 --- */
         @media (max-width: 650px) {
@@ -242,7 +303,8 @@
             .entry { flex-direction: column; align-items: flex-start; padding: 15px; }
             .entry-name { margin-right: 0; margin-bottom: 12px; width: 100%; white-space: normal; }
             .entry-actions { width: 100%; justify-content: flex-end; background-color: #f8fafc; padding: 8px; border-radius: var(--radius-md); box-sizing: border-box; }
-            .export-container { flex-direction: column; gap: 10px; }
+            .export-container { gap: 8px; }
+            .btn-export, .btn-import, .btn-import-textarea { width: 100%; } /* 手机端按钮全宽 */
         }
     </style>
 </head>
@@ -270,11 +332,22 @@
         </div>
 
         <div class="export-container">
-            <button id="importBtn" class="btn btn-import" onclick="importFromClipboard()">Import Table from Clipboard</button>
-            <button id="exportBtn" class="btn btn-export" onclick="exportToClipboard()">Export Table to Clipboard</button>
+            <button id="importTextareaBtn" class="btn btn-import-textarea" onclick="openImportModal()">Import from Textarea</button>
+            <button id="importBtn" class="btn btn-import" onclick="importFromClipboard()">Import from Clipboard</button>
+            <button id="exportBtn" class="btn btn-export" onclick="exportToClipboard()">Export to Clipboard</button>
         </div>
     </div>
 
+    <div id="importModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">Paste Task Data Below</div>
+            <textarea id="importTextarea" placeholder="Paste your exported table content here..."></textarea>
+            <div class="modal-actions">
+                <button class="btn btn-clear" onclick="closeImportModal()">Cancel</button>
+                <button class="btn btn-main" onclick="handleTextareaImport()">Import</button>
+            </div>
+        </div>
+    </div>
     <script>
         let isRunning = false;
         let activeEntryId = null;
@@ -282,7 +355,7 @@
         let entries = [];
         
         const CACHE_KEY = 'clockify_clone_cache_v3';
-        // --- 需求 3：恢复 24 小时清空设定 ---
+        // --- 需求 3：保持 24 小时清空设定 ---
         const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; 
 
         const taskInput = document.getElementById('taskInput');
@@ -358,12 +431,9 @@
             return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
         }
 
-        // --- 核心优化 1：自动递增的默认命名逻辑 ---
         function getDefaultProjectName() {
             let maxNum = 0;
-            // 正则匹配 "Default Project 1", "Default Project 2" 等
             const regex = /^Default Project (\d+)$/i; 
-            
             entries.forEach(e => {
                 const match = e.name.match(regex);
                 if (match) {
@@ -371,13 +441,9 @@
                     if (num > maxNum) maxNum = num;
                 }
             });
-            // 自动赋予下一个编号
             return `Default Project ${maxNum + 1}`;
         }
 
-        // --- 核心优化 2：分离“精准时间更新”与“全局列表渲染” ---
-        
-        // 计算当天所有的总毫秒数
         function getDailyTotalMs() {
             return entries.reduce((total, e) => {
                 let isThisRunning = (isRunning && activeEntryId === e.id);
@@ -386,45 +452,30 @@
             }, 0);
         }
 
-        // updateClock 现在【只】更新数字文本，不销毁重建 HTML，彻底解决悬浮闪烁问题
         function updateClock() {
             if (!isRunning) return;
-            
             let entry = entries.find(e => e.id === activeEntryId);
             if (!entry) return;
-
             let currentSessionMs = Date.now() - entry.lastStart;
             let displayTotalMs = entry.totalMs + currentSessionMs;
-
-            // 更新顶部的总时间
             mainTimer.textContent = formatTime(displayTotalMs);
-
-            // 仅通过 ID 精准找到列表里那个在跑的时间文本，进行替换
             let rowTimeEl = document.getElementById('time-' + activeEntryId);
             if (rowTimeEl) {
                 rowTimeEl.textContent = formatTime(displayTotalMs);
             }
-
-            // 更新总计时间
             todayTotal.textContent = formatTime(getDailyTotalMs());
         }
 
         function toggleMainTimer() {
-            if (isRunning) {
-                stopTimer();
-            } else {
-                startTimer(null); 
-            }
+            if (isRunning) stopTimer(); else startTimer(null); 
         }
 
         function startTimer(existingId) {
             if (isRunning) stopTimer(); 
-
             let now = Date.now(); 
             isRunning = true;
             mainBtn.textContent = 'STOP';
             mainBtn.classList.add('stop-mode');
-
             if (existingId) {
                 activeEntryId = existingId;
                 let entry = entries.find(e => e.id === existingId);
@@ -432,230 +483,203 @@
                 taskInput.value = entry.name; 
             } else {
                 activeEntryId = now; 
-                // 获取输入框内容，如果为空，则调用自动递增命名函数
                 let taskName = taskInput.value.trim() || getDefaultProjectName();
-                
-                entries.unshift({    
-                    id: activeEntryId,
-                    name: taskName,
-                    totalMs: 0,      
-                    lastStart: now   
-                });
+                entries.unshift({ id: activeEntryId, name: taskName, totalMs: 0, lastStart: now });
             }
-
             saveToCache(); 
             timerInterval = setInterval(updateClock, 1000);
-            renderEntries(); // 结构改变（开始计时，需要加上蓝色高亮），全量渲染一次
+            renderEntries();
             updateClock(); 
         }
 
         function stopTimer() {
             if (!isRunning) return;
-
             clearInterval(timerInterval);
             isRunning = false;
-            
             mainBtn.textContent = 'START';
             mainBtn.classList.remove('stop-mode');
-
             let entry = entries.find(e => e.id === activeEntryId);
-            if (entry) {
-                entry.totalMs += (Date.now() - entry.lastStart);
-            }
-
+            if (entry) { entry.totalMs += (Date.now() - entry.lastStart); }
             taskInput.value = '';
             mainTimer.textContent = '00:00:00';
             activeEntryId = null;
-
             saveToCache();
-            renderEntries(); // 结构改变（停止计时，去掉高亮），全量渲染一次
+            renderEntries();
         }
 
         function renameEntry(id) {
             let entry = entries.find(e => e.id === id);
             if (!entry) return;
-
             let newName = prompt("Rename task:", entry.name);
             if (newName !== null && newName.trim() !== "") {
                 entry.name = newName.trim();
-                if (isRunning && activeEntryId === id) {
-                    taskInput.value = entry.name;
-                }
+                if (isRunning && activeEntryId === id) { taskInput.value = entry.name; }
                 saveToCache();
-                renderEntries(); // 名字改变，全量渲染一次
+                renderEntries();
             }
         }
 
         function deleteEntry(id) {
             if (confirm("Delete this entry?")) {
-                if (isRunning && activeEntryId === id) {
-                    stopTimer();
-                }
+                if (isRunning && activeEntryId === id) { stopTimer(); }
                 entries = entries.filter(e => e.id !== id);
                 saveToCache();
-                renderEntries(); // 列表结构改变，全量渲染一次
+                renderEntries();
             }
         }
 
         function renderEntries() {
             entryList.innerHTML = '';
-
             if (entries.length === 0) {
-                entryList.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 14px;">No tracked tasks yet. Type above and click START.</div>';
+                entryList.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 14px;">No tracked tasks yet.</div>';
                 todayTotal.textContent = '00:00:00';
                 return;
             }
-
             entries.forEach(entry => {
                 let isThisRunning = (isRunning && activeEntryId === entry.id);
                 let currentSessionMs = isThisRunning ? (Date.now() - entry.lastStart) : 0;
                 let displayTotalMs = entry.totalMs + currentSessionMs;
-                
                 let row = document.createElement('div');
                 row.className = `entry ${isThisRunning ? 'active' : ''}`;
-                
-                // 注意这里给显示时间的 div 加上了唯一的 ID: id="time-${entry.id}"
                 row.innerHTML = `
                     <div class="entry-name" title="${entry.name}">${entry.name}</div>
                     <div class="entry-actions">
                         <div class="entry-time" id="time-${entry.id}">${formatTime(displayTotalMs)}</div>
-                        <button class="btn btn-icon" onclick="startTimer(${entry.id})" ${isThisRunning ? 'disabled' : ''} title="Resume tracking">
-                            ▶
-                        </button>
+                        <button class="btn btn-icon" onclick="startTimer(${entry.id})" ${isThisRunning ? 'disabled' : ''}>▶</button>
                         <button class="btn btn-small" onclick="renameEntry(${entry.id})">Rename</button>
                         <button class="btn btn-small btn-delete" onclick="deleteEntry(${entry.id})">Delete</button>
                     </div>
                 `;
                 entryList.appendChild(row);
             });
-
             todayTotal.textContent = formatTime(getDailyTotalMs());
         }
 
-        // --- 需求 1 & 导出逻辑更新：增加时间戳首行 ---
+        // --- 导出逻辑：增加时间戳首行 ---
         function exportToClipboard() {
-            if (entries.length === 0) {
-                alert("No tasks to export!");
-                return;
-            }
-
-            // 1. 生成时间戳首行: yy/mm/dd hh:min(CST)/hh:min(UTC)
+            if (entries.length === 0) { alert("No tasks to export!"); return; }
             const now = new Date();
             const yy = now.getFullYear().toString().slice(-2);
             const mm = String(now.getMonth() + 1).padStart(2, '0');
             const dd = String(now.getDate()).padStart(2, '0');
-            
-            // CST (UTC+8)
             const cstDate = new Date(now.getTime() + (8 * 60 * 60 * 1000));
             const cstH = String(cstDate.getUTCHours()).padStart(2, '0');
             const cstM = String(cstDate.getUTCMinutes()).padStart(2, '0');
-            
-            // UTC
             const utcH = String(now.getUTCHours()).padStart(2, '0');
             const utcM = String(now.getUTCMinutes()).padStart(2, '0');
             
             const timestampLine = `${yy}/${mm}/${dd}  ${cstH}:${cstM}(CST)/${utcH}:${utcM}(UTC)\n`;
-
-            // 2. 构建导出字符串
-            let exportString = timestampLine + "Task Name\tDuration\n";
             
+            let exportString = timestampLine + "Task Name\tDuration\n";
             entries.forEach(entry => {
                 let isThisRunning = (isRunning && activeEntryId === entry.id);
                 let currentSessionMs = isThisRunning ? (Date.now() - entry.lastStart) : 0;
                 let displayTotalMs = entry.totalMs + currentSessionMs;
-                
                 exportString += `${entry.name}\t${formatTime(displayTotalMs)}\n`;
             });
 
             navigator.clipboard.writeText(exportString).then(() => {
-                const exportBtn = document.getElementById('exportBtn');
-                const originalText = exportBtn.textContent;
-                exportBtn.textContent = "✔ Copied to Clipboard!";
-                exportBtn.style.color = "#4caf50";
-                exportBtn.style.borderColor = "#4caf50";
+                const btn = document.getElementById('exportBtn');
+                const oldText = btn.textContent;
+                const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
+                
+                btn.style.width = currentWidth + 'px';
+                btn.textContent = "✔ Copied!";
+                btn.style.color = "#4caf50";
+                btn.style.borderColor = "#4caf50";
                 
                 setTimeout(() => {
-                    exportBtn.textContent = originalText;
-                    exportBtn.style.color = "";
-                    exportBtn.style.borderColor = "";
+                    btn.textContent = oldText;
+                    btn.style.color = "";
+                    btn.style.borderColor = "";
+                    btn.style.width = ""; // 解除宽度锁定
                 }, 2000);
-            }).catch(err => {
-                alert("Failed to copy data: " + err);
             });
         }
 
-        // [[ 新增独立封装模块：导入功能 ]] -----------------------------------------
-        /* 功能目的：从剪贴板读取数据，解析任务名和用时，追加到现有任务下方。
-           兼容性：适配带时间戳首行和不带时间戳首行的格式。
-        */
+        // [[ 新增独立封装模块：通用导入解析引擎 ]] ---------------------------------
+        /* 功能目的：供剪贴板导入和文本框导入共同使用，自动过滤时间戳和标题行。 */
+        function processImportData(text) {
+            if (!text.trim()) return 0;
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
+            let importedCount = 0;
+            lines.forEach(line => {
+                if (line.includes("(CST)") || line.includes("(UTC)")) return;
+                if (line.toLowerCase().startsWith("task name\tduration")) return;
+                const parts = line.split('\t');
+                if (parts.length >= 2) {
+                    const name = parts[0].trim();
+                    const timeParts = parts[1].trim().split(':');
+                    if (timeParts.length === 3) {
+                        const totalMs = (parseInt(timeParts[0])*3600 + parseInt(timeParts[1])*60 + parseInt(timeParts[2])) * 1000;
+                        entries.push({ id: Date.now() + Math.random(), name: name, totalMs: totalMs, lastStart: Date.now() });
+                        importedCount++;
+                    }
+                }
+            });
+            if (importedCount > 0) { saveToCache(); renderEntries(); }
+            return importedCount;
+        }
+
+        // --- 剪贴板一键导入逻辑 ---
         async function importFromClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
-                if (!text.trim()) {
-                    alert("Clipboard is empty!");
-                    return;
-                }
-
-                const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
-                let importedCount = 0;
-
-                // 遍历每一行进行解析
-                lines.forEach(line => {
-                    // 过滤规则：
-                    // 1. 跳过包含 (CST)/(UTC) 的时间戳行 (需求 2 要求清除)
-                    if (line.includes("(CST)") || line.includes("(UTC)")) return;
-                    // 2. 跳过表头行
-                    if (line.toLowerCase().startsWith("task name\tduration")) return;
-
-                    // 解析任务行：按 Tab 分隔
-                    const parts = line.split('\t');
-                    if (parts.length >= 2) {
-                        const name = parts[0].trim();
-                        const durationStr = parts[1].trim(); // 格式应当是 HH:MM:SS
-
-                        // 将 HH:MM:SS 还原为毫秒数
-                        const timeParts = durationStr.split(':');
-                        if (timeParts.length === 3) {
-                            const hours = parseInt(timeParts[0], 10) || 0;
-                            const mins = parseInt(timeParts[1], 10) || 0;
-                            const secs = parseInt(timeParts[2], 10) || 0;
-                            const totalMs = (hours * 3600 + mins * 60 + secs) * 1000;
-
-                            // 需求 2：追加到现有内容下方 (数组 Push)
-                            entries.push({
-                                id: Date.now() + Math.random(), // 生成不重复的 ID
-                                name: name,
-                                totalMs: totalMs,
-                                lastStart: Date.now() // 导入时默认非运行态，但存一个时间戳备用
-                            });
-                            importedCount++;
-                        }
-                    }
-                });
-
-                if (importedCount > 0) {
-                    saveToCache();
-                    renderEntries();
+                const count = processImportData(text);
+                if (count > 0) {
+                    const btn = document.getElementById('importBtn');
+                    const oldText = btn.textContent;
+                    const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
                     
-                    // 导入反馈
-                    const importBtn = document.getElementById('importBtn');
-                    const originalText = importBtn.textContent;
-                    importBtn.textContent = `✔ Imported ${importedCount} Tasks!`;
-                    importBtn.style.color = "#4caf50";
-                    importBtn.style.borderColor = "#4caf50";
+                    btn.style.width = currentWidth + 'px';
+                    btn.textContent = `✔ ${count} Tasks!`;
+                    btn.style.color = "#4caf50";
+                    btn.style.borderColor = "#4caf50";
+                    
                     setTimeout(() => {
-                        importBtn.textContent = originalText;
-                        importBtn.style.color = "";
-                        importBtn.style.borderColor = "";
+                        btn.textContent = oldText;
+                        btn.style.color = "";
+                        btn.style.borderColor = "";
+                        btn.style.width = ""; // 解除宽度锁定
                     }, 2000);
-                } else {
-                    alert("No valid task data found in clipboard. Please ensure format is 'Name [Tab] HH:MM:SS'");
-                }
-            } catch (err) {
-                alert("Failed to read clipboard: " + err);
-            }
+                } else { alert("No valid task data found."); }
+            } catch (err) { alert("Clipboard access denied. Use 'Import from Textarea' instead."); }
         }
-        // [[ 导入功能模块结束 ]] ---------------------------------------------------
+
+        // --- 弹窗导入逻辑 (手机端专用) ---
+        function openImportModal() {
+            document.getElementById('importModal').style.display = 'flex';
+            document.getElementById('importTextarea').value = '';
+            document.getElementById('importTextarea').focus();
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+        }
+
+        function handleTextareaImport() {
+            const text = document.getElementById('importTextarea').value;
+            const count = processImportData(text);
+            if (count > 0) {
+                closeImportModal();
+                const btn = document.getElementById('importTextareaBtn');
+                const oldText = btn.textContent;
+                const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
+                
+                btn.style.width = currentWidth + 'px';
+                btn.textContent = `✔ ${count} Tasks!`;
+                btn.style.color = "#4caf50";
+                btn.style.borderColor = "#4caf50";
+                
+                setTimeout(() => {
+                    btn.textContent = oldText;
+                    btn.style.color = "";
+                    btn.style.borderColor = "";
+                    btn.style.width = ""; // 解除宽度锁定
+                }, 2000);
+            } else { alert("No valid task data found."); }
+        }
+        // [[ 模块结束 ]] ---------------------------------------------------------
 
         init();
     </script>
