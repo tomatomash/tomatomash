@@ -683,8 +683,9 @@
 
 
         // [[ 新增独立封装模块：触发器 ]] ---------------------
-        /* 功能目的：生成多次点击触发器。连续点击 6 次即可进入编辑模式，允许直接原位修改。
+        /* 功能目的：多点触发器, 原位修改 HH:MM。
            修改不会改变原有函数逻辑，采用函数拦截和事件委托完成修改与保存。
+           更新：无操作 20 秒后自动退出。
         */
         (function() {
             // 1. 创建底部隐藏模块 UI
@@ -705,10 +706,24 @@
             });
             document.querySelector('.app-wrapper').appendChild(secretFooter);
 
-            // 2. 连续点击 6 次的解锁逻辑
+            // 2. 连续点击 6 次的解锁逻辑 & 20秒自动退出逻辑
             let clickCount = 0;
             let isEditMode = false;
             let clickTimer = null;
+            let autoExitTimer = null;
+
+            // 核心机制：重置 20 秒自动退出的倒计时
+            function resetAutoExitTimer() {
+                clearTimeout(autoExitTimer);
+                if (isEditMode) {
+                    autoExitTimer = setTimeout(() => {
+                        isEditMode = false;
+                        applyEditModeToDOM();
+                        // 倒计时结束退出时，将底部按钮颜色恢复原样
+                        secretFooter.style.color = '#a0aec0';
+                    }, 20000);
+                }
+            }
 
             secretFooter.addEventListener('click', () => {
                 clickCount++;
@@ -717,13 +732,13 @@
                 clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
 
                 if (clickCount >= 6) {
-                    isEditMode = !isEditMode; // 切换编辑模式
+                    isEditMode = true; // 直接强制进入编辑模式
                     clickCount = 0;
                     applyEditModeToDOM();
+                    resetAutoExitTimer(); // 开启 20 秒自动退出倒计时
                     
-                    // 给予视觉反馈：提示模式已切换
-                    secretFooter.style.color = isEditMode ? '#0096fa' : '#a0aec0';
-                    setTimeout(() => { secretFooter.style.color = '#a0aec0'; }, 800);
+                    // 给予视觉反馈：提示模式已进入
+                    secretFooter.style.color = '#0096fa';
                 }
             });
 
@@ -754,8 +769,6 @@
             }
 
             // 4. 拦截并包装原始的 renderEntries 函数 (不破坏原代码结构)
-            // 原理：因为每次计时器状态变化都会重新渲染列表，这会覆盖掉我们加的 contenteditable 属性，
-            // 所以我们需要在它渲染完之后，立刻重新应用一次编辑样式。
             const originalRenderEntries = window.renderEntries;
             window.renderEntries = function() {
                 originalRenderEntries();
@@ -768,12 +781,11 @@
             // 当用户点击进入时间框时触发
             entryListContainer.addEventListener('focusin', (e) => {
                 if (isEditMode && e.target.classList.contains('entry-time')) {
-                    // 【关键 Hack】：如果该任务正在运行，每秒的 updateClock() 会强行覆盖里面的文本，导致无法编辑。
-                    // 解决办法：由于 updateClock 依赖于 'time-{id}' 来寻找元素，我们只要在编辑期间临时改掉这个元素的 ID 即可完美避开覆盖！
+                    resetAutoExitTimer(); // 有操作（获得焦点），重置 20 秒倒计时
                     const originalId = e.target.id;
                     if (originalId && originalId.startsWith('time-')) {
-                        e.target.dataset.originalId = originalId; // 记录原 ID
-                        e.target.id = 'editing-' + originalId.split('-')[1]; // 改名藏起来
+                        e.target.dataset.originalId = originalId; 
+                        e.target.id = 'editing-' + originalId.split('-')[1]; 
                     }
                 }
             });
@@ -786,39 +798,32 @@
                 const entry = entries.find(e => e.id === entryId);
                 if (!entry) return;
 
-                // 尝试解析用户修改的文本（无论是 HH:MM 还是 HH:MM:SS，都能兼容处理）
                 const timeText = targetEl.textContent.trim();
                 const parts = timeText.split(':');
                 if (parts.length >= 2) { 
                     let h = 0, m = 0, s = 0;
-                    if (parts.length === 3) { // 格式 HH:MM:SS
+                    if (parts.length === 3) { 
                         h = parseInt(parts[0]) || 0;
                         m = parseInt(parts[1]) || 0;
                         s = parseInt(parts[2]) || 0;
-                    } else if (parts.length === 2) { // 格式 HH:MM
+                    } else if (parts.length === 2) { 
                         h = parseInt(parts[0]) || 0;
                         m = parseInt(parts[1]) || 0;
                     }
                     
                     const newTotalMs = (h * 3600 + m * 60 + s) * 1000;
 
-                    // 计算并写入底层数据
                     if (isRunning && activeEntryId === entryId) {
-                        // 【难点】：如果任务正在运行，我们不能直接把 totalMs 设为新数字，因为现在的展示时间 = totalMs + 当前session跑掉的时间
-                        // 修正公式：目标展示时间 = 新的 totalMs + 当前session跑掉的时间
                         const currentSessionMs = Date.now() - entry.lastStart;
                         entry.totalMs = newTotalMs - currentSessionMs;
                     } else {
-                        // 停止状态下直接赋值
                         entry.totalMs = newTotalMs;
                     }
                 }
 
-                // 修改完成，把 ID 恢复成原来的名字
                 targetEl.id = targetEl.dataset.originalId;
                 saveToCache();
                 
-                // 重新渲染列表以规范化显示格式，并顺带更新顶部的总计时间
                 window.renderEntries();
                 if (typeof window.updateClock === 'function') window.updateClock();
             }
@@ -827,15 +832,17 @@
             entryListContainer.addEventListener('focusout', (e) => {
                 if (isEditMode && e.target.classList.contains('entry-time')) {
                     commitTimeEdit(e.target);
+                    resetAutoExitTimer(); // 保存完成，重置 20 秒倒计时
                 }
             });
 
             // 当用户在编辑框按下回车时，取消默认换行并触发保存
             entryListContainer.addEventListener('keydown', (e) => {
                 if (isEditMode && e.target.classList.contains('entry-time')) {
+                    resetAutoExitTimer(); // 任何打字操作，重置 20 秒倒计时
                     if (e.key === 'Enter') {
                         e.preventDefault(); 
-                        e.target.blur(); // 主动失焦，从而触发上面写好的 focusout 事件
+                        e.target.blur(); 
                     }
                 }
             });
