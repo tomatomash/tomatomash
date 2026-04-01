@@ -683,9 +683,9 @@
 
 
         // [[ 新增独立封装模块：隐藏的底部时间编辑触发器 ]] ---------------------
-        /* 功能目的：多点触发器, 原位修改 HH:MM。
+        /* 功能目的：在页面底部生成伪装成文本的多次点击触发器。连续点击 6 次即可进入编辑模式，允许直接原位修改 HH:MM。
            修改不会改变原有函数逻辑，采用函数拦截和事件委托完成修改与保存。
-           更新：无操作 20 秒后自动退出。
+           更新：无操作 20 秒后自动退出编辑模式，无需再次点击。
         */
         (function() {
             // 1. 创建底部隐藏模块 UI
@@ -706,7 +706,7 @@
             });
             document.querySelector('.app-wrapper').appendChild(secretFooter);
 
-            // 2. 解锁逻辑 & 20秒自动退出逻辑
+            // 2. 连续点击 6 次的解锁逻辑 & 20秒自动退出逻辑
             let clickCount = 0;
             let isEditMode = false;
             let clickTimer = null;
@@ -802,4 +802,64 @@
                 
                 // --- 新增数值格式检查机制 ---
                 // 仅允许纯阿拉伯数字和冒号的组合（例如 HH:MM 或 HH:MM:SS）
-                const isValidFormat = /^\d+:\d+(
+                const isValidFormat = /^\d+:\d+(:\d+)?$/.test(timeText);
+
+                if (isValidFormat) {
+                    const parts = timeText.split(':');
+                    if (parts.length >= 2) { 
+                        let h = 0, m = 0, s = 0;
+                        if (parts.length === 3) { 
+                            h = parseInt(parts[0]) || 0;
+                            m = parseInt(parts[1]) || 0;
+                            s = parseInt(parts[2]) || 0;
+                        } else if (parts.length === 2) { 
+                            h = parseInt(parts[0]) || 0;
+                            m = parseInt(parts[1]) || 0;
+                        }
+                        
+                        const newTotalMs = (h * 3600 + m * 60 + s) * 1000;
+
+                        if (isRunning && activeEntryId === entryId) {
+                            const currentSessionMs = Date.now() - entry.lastStart;
+                            entry.totalMs = newTotalMs - currentSessionMs;
+                        } else {
+                            entry.totalMs = newTotalMs;
+                        }
+                    }
+                }
+                // 如果格式不符合，则跳过修改逻辑，下方重新渲染会自动把错误的输入还原为正确的原本时间
+
+                targetEl.id = targetEl.dataset.originalId;
+                saveToCache();
+                
+                window.renderEntries();
+                if (typeof window.updateClock === 'function') window.updateClock();
+            }
+
+            // 当焦点移开（点击其他地方）时自动保存
+            entryListContainer.addEventListener('focusout', (e) => {
+                if (isEditMode && e.target.classList.contains('entry-time')) {
+                    commitTimeEdit(e.target);
+                    resetAutoExitTimer(); // 保存完成，重置 20 秒倒计时
+                }
+            });
+
+            // 当用户在编辑框按下回车时，取消默认换行并触发保存
+            entryListContainer.addEventListener('keydown', (e) => {
+                if (isEditMode && e.target.classList.contains('entry-time')) {
+                    resetAutoExitTimer(); // 任何打字操作，重置 20 秒倒计时
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); 
+                        e.target.blur(); 
+                    }
+                }
+            });
+
+        })();
+        // [[ 模块结束 ]] -------------------------------------------------------
+
+
+        init();
+    </script>
+</body>
+</html>
