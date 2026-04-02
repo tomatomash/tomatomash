@@ -79,8 +79,8 @@
             font-size: 22px;
             font-weight: 600;
             font-family: 'Courier New', Courier, monospace;
-            width: 120px; /* 优化：从 min-width 变为绝对定宽，防止左右抖动 */
-            text-align: center; /* 优化：居中对齐提升视觉稳定性 */
+            width: 120px; 
+            text-align: center; 
             color: var(--text-main);
         }
 
@@ -100,9 +100,9 @@
         .btn-main {
             background-color: var(--primary);
             color: white;
-            padding: 0; /* 优化：移除 padding，完全依靠定宽限制体积 */
+            padding: 0; 
             height: 44px;
-            width: 110px; /* 优化：绝对定宽，防止 START/PAUSE 文本切换时抖动 */
+            width: 110px; 
             font-size: 14px;
         }
         .btn-main:hover { background-color: var(--primary-hover); }
@@ -178,8 +178,8 @@
             font-weight: 600;
             font-size: 16px;
             font-family: 'Courier New', Courier, monospace;
-            width: 95px; /* 优化：从 min-width 变为绝对定宽，防止时间文本拉扯其他按钮 */
-            text-align: center; /* 优化：居中对齐 */
+            width: 95px; 
+            text-align: center; 
             color: var(--text-main);
         }
 
@@ -189,8 +189,8 @@
             color: #cbd5e0;
             font-size: 20px;
             cursor: pointer;
-            padding: 0; /* 优化：移除 padding */
-            width: 36px; /* 优化：固定宽高防止 ▶/⏸ 图标切换时左右挤压抖动 */
+            padding: 0; 
+            width: 36px; 
             height: 36px;
             display: inline-flex;
             justify-content: center;
@@ -219,15 +219,15 @@
             display: flex;
             justify-content: center;
             gap: 12px; 
-            flex-wrap: wrap; /* 手机端自动换行 */
+            flex-wrap: wrap; 
         }
 
         .btn-export, .btn-import, .btn-import-textarea {
             background-color: var(--card-bg);
             color: var(--text-main);
             border: 1px solid var(--border-color);
-            padding: 0 20px; /* 优化：移除上下 padding，用绝对高度支撑 */
-            height: 42px; /* 优化：强制锁定高度，根除点击反馈时的上下像素跳动 */
+            padding: 0 20px; 
+            height: 42px; 
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -235,7 +235,7 @@
             border-radius: 20px; 
             box-shadow: 0 2px 10px rgba(0,0,0,0.03);
             transition: all 0.2s ease;
-            box-sizing: border-box; /* 优化：确保高度包含 border */
+            box-sizing: border-box; 
         }
 
         .btn-export:hover, .btn-import:hover, .btn-import-textarea:hover {
@@ -246,7 +246,7 @@
 
         /* [[ 新增独立样式模块：浮动弹窗 (Modal) ]] ------------------------------- */
         .modal-overlay {
-            display: none; /* 默认隐藏 */
+            display: none; 
             position: fixed;
             top: 0;
             left: 0;
@@ -258,7 +258,7 @@
             align-items: center;
             padding: 20px;
             box-sizing: border-box;
-            backdrop-filter: blur(4px); /* 背景模糊效果 */
+            backdrop-filter: blur(4px); 
         }
 
         .modal-content {
@@ -314,7 +314,7 @@
             .entry-name { margin-right: 0; margin-bottom: 12px; width: 100%; white-space: normal; }
             .entry-actions { width: 100%; justify-content: flex-end; background-color: #f8fafc; padding: 8px; border-radius: var(--radius-md); box-sizing: border-box; }
             .export-container { gap: 8px; }
-            .btn-export, .btn-import, .btn-import-textarea { width: 100%; } /* 手机端按钮全宽 */
+            .btn-export, .btn-import, .btn-import-textarea { width: 100%; } 
         }
     </style>
 </head>
@@ -929,6 +929,199 @@
             }
         })();
         // [[ 模块结束 ]] ---------------------------------------------------------
+
+
+        // [[ 新增独立封装模块：45分钟番茄钟休息提醒 & 测试小礼炮 ]] ---------------------
+        /* 功能目的：
+           1. 连续计满45分钟弹出休息提醒，Tab改变名称。
+           2. 10秒不点击自动消失，或点击任意处、点击关闭按钮消失。
+           3. 页面右侧增加小礼炮(🎉)按钮，默认不可点、置灰状态。
+           4. 监听底部连续点击6次解锁（与编辑模式完全同步），解锁后可手动点击触发休息弹窗。
+        */
+        (function() {
+            // --- 1. 创建小礼炮按钮 UI ---
+            const partyBtn = document.createElement('div');
+            partyBtn.innerHTML = '🎉';
+            Object.assign(partyBtn.style, {
+                position: 'fixed',
+                right: '25px',
+                bottom: '25px',
+                width: '50px',
+                height: '50px',
+                backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                borderRadius: '50%',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                fontSize: '24px',
+                cursor: 'not-allowed',
+                opacity: '0.3',
+                filter: 'grayscale(100%)',
+                transition: 'all 0.3s ease',
+                pointerEvents: 'none',
+                zIndex: '900',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(0,0,0,0.1)',
+                userSelect: 'none'
+            });
+            partyBtn.title = "Break Time Trigger (Locked)";
+            document.body.appendChild(partyBtn);
+
+            // --- 2. 创建弹窗 UI ---
+            const breakModal = document.createElement('div');
+            Object.assign(breakModal.style, {
+                display: 'none',
+                position: 'fixed',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                zIndex: '9999',
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'column',
+                backdropFilter: 'blur(8px)',
+                color: '#fff',
+                fontFamily: 'sans-serif'
+            });
+            
+            breakModal.innerHTML = `
+                <div style="font-size: 70px; margin-bottom: 20px;">☕</div>
+                <div style="font-size: 36px; font-weight: bold; margin-bottom: 15px; text-align: center; letter-spacing: 1px;">Break Time!</div>
+                <div style="font-size: 22px; color: #cbd5e0; text-align: center; margin-bottom: 40px; font-weight: 300;">Stand up! Look away!</div>
+                <button id="closeBreakBtn" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 25px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Close</button>
+            `;
+            document.body.appendChild(breakModal);
+
+            const closeBreakBtn = breakModal.querySelector('#closeBreakBtn');
+            closeBreakBtn.addEventListener('mouseover', () => { closeBreakBtn.style.background = 'rgba(255,255,255,0.3)'; });
+            closeBreakBtn.addEventListener('mouseout', () => { closeBreakBtn.style.background = 'rgba(255,255,255,0.15)'; });
+
+            // --- 3. 弹窗控制逻辑 ---
+            let breakTimeout = null;
+            const originalTitle = document.title;
+
+            function closeBreakModal() {
+                if (breakModal.style.display === 'none') return;
+                breakModal.style.display = 'none';
+                document.title = originalTitle;
+                clearTimeout(breakTimeout);
+                document.removeEventListener('click', handleOutsideClick);
+            }
+
+            // 处理点击任意地方消失（绑定给 document）
+            function handleOutsideClick(e) {
+                closeBreakModal();
+            }
+
+            function triggerBreakModal() {
+                breakModal.style.display = 'flex';
+                document.title = "Break Time!";
+                
+                clearTimeout(breakTimeout);
+                breakTimeout = setTimeout(() => {
+                    closeBreakModal();
+                }, 10000);
+
+                // 延迟绑定 click，防止触发按钮本身的 click 事件直接把它关掉
+                setTimeout(() => {
+                    document.addEventListener('click', handleOutsideClick);
+                }, 50);
+            }
+
+            closeBreakBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeBreakModal();
+            });
+
+            partyBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止冒泡
+                triggerBreakModal();
+            });
+
+            // --- 4. 45分钟连续计时监测逻辑 ---
+            const FORTY_FIVE_MINS_MS = 45 * 60 * 1000;
+            let lastTriggeredStartTimestamp = null; 
+
+            setInterval(() => {
+                if (window.isRunning && window.activeEntryId) {
+                    const entry = window.entries.find(e => e.id === window.activeEntryId);
+                    if (entry) {
+                        const currentSessionMs = Date.now() - entry.lastStart;
+                        if (currentSessionMs >= FORTY_FIVE_MINS_MS) {
+                            if (lastTriggeredStartTimestamp !== entry.lastStart) {
+                                lastTriggeredStartTimestamp = entry.lastStart;
+                                triggerBreakModal();
+                            }
+                        }
+                    }
+                } else {
+                    lastTriggeredStartTimestamp = null;
+                }
+            }, 1000);
+
+            // --- 5. 同步底部解锁逻辑 (保持完全解耦，寻找底部的特定文本并平行挂载逻辑) ---
+            const footers = Array.from(document.querySelectorAll('.app-wrapper > div'));
+            const targetFooter = footers.find(el => el.textContent.includes('Powered by Tomatomash'));
+
+            if (targetFooter) {
+                let clickCount = 0;
+                let partyActive = false;
+                let clickTimer = null;
+                let autoExitTimer = null;
+
+                function lockPartyBtn() {
+                    partyActive = false;
+                    partyBtn.style.opacity = '0.3';
+                    partyBtn.style.filter = 'grayscale(100%)';
+                    partyBtn.style.pointerEvents = 'none';
+                    partyBtn.style.cursor = 'not-allowed';
+                    partyBtn.title = "Break Time Trigger (Locked)";
+                }
+
+                function unlockPartyBtn() {
+                    partyActive = true;
+                    partyBtn.style.opacity = '1';
+                    partyBtn.style.filter = 'none';
+                    partyBtn.style.pointerEvents = 'auto';
+                    partyBtn.style.cursor = 'pointer';
+                    partyBtn.title = "Click to trigger Break Time!";
+                }
+
+                function resetPartyAutoExit() {
+                    clearTimeout(autoExitTimer);
+                    if (partyActive) {
+                        autoExitTimer = setTimeout(() => {
+                            lockPartyBtn();
+                        }, 20000);
+                    }
+                }
+
+                targetFooter.addEventListener('click', () => {
+                    clickCount++;
+                    clearTimeout(clickTimer);
+                    clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
+
+                    if (clickCount >= 6) {
+                        clickCount = 0;
+                        unlockPartyBtn();
+                        resetPartyAutoExit();
+                    }
+                });
+
+                // 同步监听 entryList，维持 20 秒解锁时间一致性
+                const entryListContainer = document.getElementById('entryList');
+                if (entryListContainer) {
+                    entryListContainer.addEventListener('focusin', () => { if(partyActive) resetPartyAutoExit(); });
+                    entryListContainer.addEventListener('focusout', () => { if(partyActive) resetPartyAutoExit(); });
+                    entryListContainer.addEventListener('keydown', () => { if(partyActive) resetPartyAutoExit(); });
+                }
+            }
+
+        })();
+        // [[ 模块结束 ]] -------------------------------------------------------
 
 
         init();
