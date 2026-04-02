@@ -933,10 +933,12 @@
 
         // [[ 新增独立封装模块：45分钟番茄钟休息提醒 & 测试小礼炮 ]] ---------------------
         /* 功能目的：
-           1. 连续计满45分钟弹出休息提醒，Tab改变名称。
-           2. 10秒不点击自动消失，或点击任意处、点击关闭按钮消失。
-           3. 页面右侧增加小礼炮(🎉)按钮，默认不可点、置灰状态。
-           4. 监听底部连续点击6次解锁（与编辑模式完全同步），解锁后可手动点击触发休息弹窗。
+           1. 任务计时期间，每满45分钟弹出休息提醒，Tab改变名称。
+           2. 点击小礼炮手动触发休息提醒后，无论原进度多少，45分钟重新开始计算。
+           3. 没有任何任务计时的情况下，绝对不会触发休息提醒。
+           4. 10秒不点击自动消失，或点击任意处、点击关闭按钮消失。
+           5. 页面右侧增加小礼炮(🎉)按钮，默认不可点、置灰状态。
+           6. 监听底部连续点击6次解锁（与编辑模式完全同步），解锁后可手动点击触发休息弹窗。
         */
         (function() {
             // --- 1. 创建小礼炮按钮 UI ---
@@ -1011,7 +1013,6 @@
                 document.removeEventListener('click', handleOutsideClick);
             }
 
-            // 处理点击任意地方消失（绑定给 document）
             function handleOutsideClick(e) {
                 closeBreakModal();
             }
@@ -1025,7 +1026,6 @@
                     closeBreakModal();
                 }, 10000);
 
-                // 延迟绑定 click，防止触发按钮本身的 click 事件直接把它关掉
                 setTimeout(() => {
                     document.addEventListener('click', handleOutsideClick);
                 }, 50);
@@ -1036,33 +1036,44 @@
                 closeBreakModal();
             });
 
-            partyBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // 阻止冒泡
-                triggerBreakModal();
-            });
-
-            // --- 4. 45分钟连续计时监测逻辑 ---
+            // --- 4. 45分钟独立解绑倒计时逻辑 ---
             const FORTY_FIVE_MINS_MS = 45 * 60 * 1000;
-            let lastTriggeredStartTimestamp = null; 
+            let lastBreakResetTime = Date.now();
+            let wasRunning = false;
 
             setInterval(() => {
-                if (window.isRunning && window.activeEntryId) {
-                    const entry = window.entries.find(e => e.id === window.activeEntryId);
-                    if (entry) {
-                        const currentSessionMs = Date.now() - entry.lastStart;
-                        if (currentSessionMs >= FORTY_FIVE_MINS_MS) {
-                            if (lastTriggeredStartTimestamp !== entry.lastStart) {
-                                lastTriggeredStartTimestamp = entry.lastStart;
-                                triggerBreakModal();
-                            }
+                if (window.isRunning) {
+                    if (!wasRunning) {
+                        // 刚刚从暂停变成开始，重置倒计时起点
+                        wasRunning = true;
+                        lastBreakResetTime = Date.now();
+                    } else {
+                        // 持续运行中，检查是否达到 45 分钟
+                        const elapsed = Date.now() - lastBreakResetTime;
+                        if (elapsed >= FORTY_FIVE_MINS_MS) {
+                            triggerBreakModal();
+                            lastBreakResetTime = Date.now(); // 触发后，重新开始下一个 45 分钟的倒数
                         }
                     }
                 } else {
-                    lastTriggeredStartTimestamp = null;
+                    if (wasRunning) {
+                        // 刚刚从运行变成暂停，倒计时挂起失效
+                        wasRunning = false;
+                    }
                 }
             }, 1000);
 
-            // --- 5. 同步底部解锁逻辑 (保持完全解耦，寻找底部的特定文本并平行挂载逻辑) ---
+            // 手动点击小礼炮
+            partyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                triggerBreakModal();
+                // 如果当前有任务在跑，手动休息后，将下一个自动休息顺延到 45 分钟之后
+                if (window.isRunning) {
+                    lastBreakResetTime = Date.now();
+                }
+            });
+
+            // --- 5. 同步底部解锁逻辑 ---
             const footers = Array.from(document.querySelectorAll('.app-wrapper > div'));
             const targetFooter = footers.find(el => el.textContent.includes('Powered by Tomatomash'));
 
@@ -1111,7 +1122,6 @@
                     }
                 });
 
-                // 同步监听 entryList，维持 20 秒解锁时间一致性
                 const entryListContainer = document.getElementById('entryList');
                 if (entryListContainer) {
                     entryListContainer.addEventListener('focusin', () => { if(partyActive) resetPartyAutoExit(); });
