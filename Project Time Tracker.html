@@ -367,7 +367,7 @@
         function init() {
             loadFromCache();
             if (isRunning && activeEntryId) {
-                mainBtn.textContent = 'STOP';
+                mainBtn.textContent = 'PAUSE';
                 mainBtn.classList.add('stop-mode');
                 timerInterval = setInterval(updateClock, 1000);
             }
@@ -474,7 +474,7 @@
             if (isRunning) stopTimer(); 
             let now = Date.now(); 
             isRunning = true;
-            mainBtn.textContent = 'STOP';
+            mainBtn.textContent = 'PAUSE';
             mainBtn.classList.add('stop-mode');
             if (existingId) {
                 activeEntryId = existingId;
@@ -545,7 +545,7 @@
                     <div class="entry-name" title="${entry.name}">${entry.name}</div>
                     <div class="entry-actions">
                         <div class="entry-time" id="time-${entry.id}">${formatTime(displayTotalMs)}</div>
-                        <button class="btn btn-icon" onclick="startTimer(${entry.id})" ${isThisRunning ? 'disabled' : ''}>▶</button>
+                        <button class="btn btn-icon" onclick="${isThisRunning ? 'stopTimer()' : `startTimer(${entry.id})`}" title="${isThisRunning ? 'Pause tracking' : 'Resume tracking'}">${isThisRunning ? '⏸' : '▶'}</button>
                         <button class="btn btn-small" onclick="renameEntry(${entry.id})">Rename</button>
                         <button class="btn btn-small btn-delete" onclick="deleteEntry(${entry.id})">Delete</button>
                     </div>
@@ -581,11 +581,13 @@
             navigator.clipboard.writeText(exportString).then(() => {
                 const btn = document.getElementById('exportBtn');
                 const oldText = btn.textContent;
-                const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
-                const currentHeight = btn.offsetHeight; // 需求 3：动态锁定高度
+                const oldTransition = btn.style.transition; // 记录原有动画
+                btn.style.transition = 'none'; // 临时禁用动画以防尺寸变更引发整体抖动
+                const currentWidth = btn.offsetWidth; 
+                const currentHeight = btn.offsetHeight; 
                 
                 btn.style.width = currentWidth + 'px';
-                btn.style.height = currentHeight + 'px'; // 锁定高度
+                btn.style.height = currentHeight + 'px'; 
                 btn.textContent = "✔ Copied!";
                 btn.style.color = "#4caf50";
                 btn.style.borderColor = "#4caf50";
@@ -594,8 +596,9 @@
                     btn.textContent = oldText;
                     btn.style.color = "";
                     btn.style.borderColor = "";
-                    btn.style.width = ""; // 解除宽度锁定
-                    btn.style.height = ""; // 解除高度锁定
+                    btn.style.width = ""; 
+                    btn.style.height = ""; 
+                    setTimeout(() => { btn.style.transition = oldTransition; }, 50); // 延迟恢复动画
                 }, 2000);
             });
         }
@@ -632,11 +635,13 @@
                 if (count > 0) {
                     const btn = document.getElementById('importBtn');
                     const oldText = btn.textContent;
-                    const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
-                    const currentHeight = btn.offsetHeight; // 需求 3：动态锁定高度
+                    const oldTransition = btn.style.transition;
+                    btn.style.transition = 'none';
+                    const currentWidth = btn.offsetWidth; 
+                    const currentHeight = btn.offsetHeight; 
                     
                     btn.style.width = currentWidth + 'px';
-                    btn.style.height = currentHeight + 'px'; // 锁定高度
+                    btn.style.height = currentHeight + 'px'; 
                     btn.textContent = `✔ ${count} Tasks!`;
                     btn.style.color = "#4caf50";
                     btn.style.borderColor = "#4caf50";
@@ -645,8 +650,9 @@
                         btn.textContent = oldText;
                         btn.style.color = "";
                         btn.style.borderColor = "";
-                        btn.style.width = ""; // 解除宽度锁定
-                        btn.style.height = ""; // 解除高度锁定
+                        btn.style.width = ""; 
+                        btn.style.height = ""; 
+                        setTimeout(() => { btn.style.transition = oldTransition; }, 50);
                     }, 2000);
                 } else { alert("No valid task data found."); }
             } catch (err) { alert("Clipboard access denied. Use 'Import from Text' instead."); }
@@ -670,11 +676,13 @@
                 closeImportModal();
                 const btn = document.getElementById('importTextareaBtn');
                 const oldText = btn.textContent;
-                const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
-                const currentHeight = btn.offsetHeight; // 需求 3：动态锁定高度
+                const oldTransition = btn.style.transition;
+                btn.style.transition = 'none';
+                const currentWidth = btn.offsetWidth; 
+                const currentHeight = btn.offsetHeight; 
                 
                 btn.style.width = currentWidth + 'px';
-                btn.style.height = currentHeight + 'px'; // 锁定高度
+                btn.style.height = currentHeight + 'px'; 
                 btn.textContent = `✔ ${count} Tasks!`;
                 btn.style.color = "#4caf50";
                 btn.style.borderColor = "#4caf50";
@@ -683,8 +691,9 @@
                     btn.textContent = oldText;
                     btn.style.color = "";
                     btn.style.borderColor = "";
-                    btn.style.width = ""; // 解除宽度锁定
-                    btn.style.height = ""; // 解除高度锁定
+                    btn.style.width = ""; 
+                    btn.style.height = ""; 
+                    setTimeout(() => { btn.style.transition = oldTransition; }, 50);
                 }, 2000);
             } else { alert("No valid task data found."); }
         }
@@ -886,6 +895,24 @@
                             inputEl.value = currentVal;
                             window.startTimer(null);
                             inputEl.blur(); // 开启后使输入框失去焦点，提升交互手感
+                        }
+                    }
+                });
+            }
+        })();
+        // [[ 模块结束 ]] ---------------------------------------------------------
+
+
+        // [[ 新增独立封装模块：文本框回车快捷导入 ]] -----------------------------
+        /* 功能目的：在“Import from Text”弹窗的输入框中按下回车键，可直接完成导入。 */
+        (function() {
+            const textareaEl = document.getElementById('importTextarea');
+            if(textareaEl) {
+                textareaEl.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // 阻止默认换行行为
+                        if (typeof window.handleTextareaImport === 'function') {
+                            window.handleTextareaImport();
                         }
                     }
                 });
