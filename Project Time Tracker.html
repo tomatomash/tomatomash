@@ -332,7 +332,7 @@
         </div>
 
         <div class="export-container">
-            <button id="importTextareaBtn" class="btn btn-import-textarea" onclick="openImportModal()">Import from Textarea</button>
+            <button id="importTextareaBtn" class="btn btn-import-textarea" onclick="openImportModal()">Import from Text</button>
             <button id="importBtn" class="btn btn-import" onclick="importFromClipboard()">Import from Clipboard</button>
             <button id="exportBtn" class="btn btn-export" onclick="exportToClipboard()">Export to Clipboard</button>
         </div>
@@ -582,8 +582,10 @@
                 const btn = document.getElementById('exportBtn');
                 const oldText = btn.textContent;
                 const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
+                const currentHeight = btn.offsetHeight; // 需求 3：动态锁定高度
                 
                 btn.style.width = currentWidth + 'px';
+                btn.style.height = currentHeight + 'px'; // 锁定高度
                 btn.textContent = "✔ Copied!";
                 btn.style.color = "#4caf50";
                 btn.style.borderColor = "#4caf50";
@@ -593,6 +595,7 @@
                     btn.style.color = "";
                     btn.style.borderColor = "";
                     btn.style.width = ""; // 解除宽度锁定
+                    btn.style.height = ""; // 解除高度锁定
                 }, 2000);
             });
         }
@@ -630,8 +633,10 @@
                     const btn = document.getElementById('importBtn');
                     const oldText = btn.textContent;
                     const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
+                    const currentHeight = btn.offsetHeight; // 需求 3：动态锁定高度
                     
                     btn.style.width = currentWidth + 'px';
+                    btn.style.height = currentHeight + 'px'; // 锁定高度
                     btn.textContent = `✔ ${count} Tasks!`;
                     btn.style.color = "#4caf50";
                     btn.style.borderColor = "#4caf50";
@@ -641,9 +646,10 @@
                         btn.style.color = "";
                         btn.style.borderColor = "";
                         btn.style.width = ""; // 解除宽度锁定
+                        btn.style.height = ""; // 解除高度锁定
                     }, 2000);
                 } else { alert("No valid task data found."); }
-            } catch (err) { alert("Clipboard access denied. Use 'Import from Textarea' instead."); }
+            } catch (err) { alert("Clipboard access denied. Use 'Import from Text' instead."); }
         }
 
         // --- 弹窗导入逻辑 (手机端专用) ---
@@ -665,8 +671,10 @@
                 const btn = document.getElementById('importTextareaBtn');
                 const oldText = btn.textContent;
                 const currentWidth = btn.offsetWidth; // 动态锁定宽度，防止抖动
+                const currentHeight = btn.offsetHeight; // 需求 3：动态锁定高度
                 
                 btn.style.width = currentWidth + 'px';
+                btn.style.height = currentHeight + 'px'; // 锁定高度
                 btn.textContent = `✔ ${count} Tasks!`;
                 btn.style.color = "#4caf50";
                 btn.style.borderColor = "#4caf50";
@@ -676,6 +684,7 @@
                     btn.style.color = "";
                     btn.style.borderColor = "";
                     btn.style.width = ""; // 解除宽度锁定
+                    btn.style.height = ""; // 解除高度锁定
                 }, 2000);
             } else { alert("No valid task data found."); }
         }
@@ -800,7 +809,7 @@
 
                 const timeText = targetEl.textContent.trim();
                 
-                // --- 新增数值格式检查机制 ---
+                // --- 数值格式检查机制 ---
                 // 仅允许纯阿拉伯数字和冒号的组合（例如 HH:MM 或 HH:MM:SS）
                 const isValidFormat = /^\d+:\d+(:\d+)?$/.test(timeText);
 
@@ -857,6 +866,32 @@
 
         })();
         // [[ 模块结束 ]] -------------------------------------------------------
+
+
+        // [[ 新增独立封装模块：输入框回车快捷启动 ]] -----------------------------
+        /* 功能目的：在“What are you working on?”输入框中按下回车键，可直接保存输入并开始新任务计时。 */
+        (function() {
+            const inputEl = document.getElementById('taskInput');
+            if(inputEl) {
+                inputEl.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // 阻止默认回车行为
+                        if (typeof window.startTimer === 'function') {
+                            // 保存当前输入的值，防止被已有的 stopTimer 逻辑清空
+                            const currentVal = inputEl.value;
+                            if (window.isRunning) {
+                                window.stopTimer();
+                            }
+                            // 恢复输入值并开启新任务
+                            inputEl.value = currentVal;
+                            window.startTimer(null);
+                            inputEl.blur(); // 开启后使输入框失去焦点，提升交互手感
+                        }
+                    }
+                });
+            }
+        })();
+        // [[ 模块结束 ]] ---------------------------------------------------------
 
 
         init();
