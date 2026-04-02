@@ -78,8 +78,9 @@
         .timer-display {
             font-size: 22px;
             font-weight: 600;
-            font-family: 'Courier New', Courier, monospace;
-            width: 120px; 
+            /* 优化：去除衬线字体，继承全局无衬线字体，并使用 tabular-nums 保证数字对齐 */
+            font-variant-numeric: tabular-nums;
+            width: 135px; /* 恢复显示秒数后微调宽度防止抖动 */
             text-align: center; 
             color: var(--text-main);
         }
@@ -142,7 +143,8 @@
             color: var(--text-main);
             font-weight: 700;
             margin-left: 8px;
-            font-family: 'Courier New', Courier, monospace;
+            /* 优化：去除衬线字体 */
+            font-variant-numeric: tabular-nums;
         }
 
         .entry {
@@ -177,8 +179,9 @@
         .entry-time {
             font-weight: 600;
             font-size: 16px;
-            font-family: 'Courier New', Courier, monospace;
-            width: 95px; 
+            /* 优化：去除衬线字体 */
+            font-variant-numeric: tabular-nums;
+            width: 110px; /* 恢复显示秒数后微调宽度防止抖动 */
             text-align: center; 
             color: var(--text-main);
         }
@@ -287,7 +290,7 @@
             border-radius: var(--radius-md);
             padding: 12px;
             font-size: 14px;
-            font-family: monospace;
+            /* 优化：去除文本框独立的等宽字体，让全页统一 */
             resize: none;
             outline: none;
             box-sizing: border-box;
@@ -379,7 +382,13 @@
             if (isRunning && activeEntryId) {
                 mainBtn.textContent = 'PAUSE';
                 mainBtn.classList.add('stop-mode');
-                timerInterval = setInterval(updateClock, 1000);
+                // 完美毫秒同步引擎：让主计时器也对齐到系统整秒边界
+                const syncLoop = () => {
+                    if (!isRunning) return;
+                    updateClock();
+                    timerInterval = setTimeout(syncLoop, 1000 - (Date.now() % 1000));
+                };
+                timerInterval = setTimeout(syncLoop, 1000 - (Date.now() % 1000));
             }
             renderEntries();
         }
@@ -418,7 +427,7 @@
 
         function clearAllData() {
             if (confirm("Are you sure you want to clear all data? This cannot be undone.")) {
-                clearInterval(timerInterval);
+                clearTimeout(timerInterval);
                 isRunning = false;
                 activeEntryId = null;
                 entries = [];
@@ -433,6 +442,7 @@
             }
         }
 
+        // 优化：恢复秒数显示机制
         function formatTime(ms) {
             let totalSeconds = Math.floor(ms / 1000);
             let h = Math.floor(totalSeconds / 3600);
@@ -497,14 +507,22 @@
                 entries.unshift({ id: activeEntryId, name: taskName, totalMs: 0, lastStart: now });
             }
             saveToCache(); 
-            timerInterval = setInterval(updateClock, 1000);
             renderEntries();
             updateClock(); 
+            
+            if (timerInterval) clearTimeout(timerInterval);
+            // 完美毫秒同步引擎：让主计时器也对齐到系统整秒边界
+            const syncLoop = () => {
+                if (!isRunning) return;
+                updateClock();
+                timerInterval = setTimeout(syncLoop, 1000 - (Date.now() % 1000));
+            };
+            timerInterval = setTimeout(syncLoop, 1000 - (Date.now() % 1000));
         }
 
         function stopTimer() {
             if (!isRunning) return;
-            clearInterval(timerInterval);
+            clearTimeout(timerInterval);
             isRunning = false;
             mainBtn.textContent = 'START';
             mainBtn.classList.remove('stop-mode');
@@ -623,11 +641,21 @@
                 if (line.includes("(CST)") || line.includes("(UTC)")) return;
                 if (line.toLowerCase().startsWith("task name\tduration")) return;
                 const parts = line.split('\t');
+                
                 if (parts.length >= 2) {
                     const name = parts[0].trim();
                     const timeParts = parts[1].trim().split(':');
-                    if (timeParts.length === 3) {
-                        const totalMs = (parseInt(timeParts[0])*3600 + parseInt(timeParts[1])*60 + parseInt(timeParts[2])) * 1000;
+                    if (timeParts.length >= 2) {
+                        let h = 0, m = 0, s = 0;
+                        if (timeParts.length === 3) {
+                            h = parseInt(timeParts[0]) || 0;
+                            m = parseInt(timeParts[1]) || 0;
+                            s = parseInt(timeParts[2]) || 0;
+                        } else if (timeParts.length === 2) {
+                            h = parseInt(timeParts[0]) || 0;
+                            m = parseInt(timeParts[1]) || 0;
+                        }
+                        const totalMs = (h * 3600 + m * 60 + s) * 1000;
                         entries.push({ id: Date.now() + Math.random(), name: name, totalMs: totalMs, lastStart: Date.now() });
                         importedCount++;
                     }
@@ -711,7 +739,7 @@
 
 
         // [[ 新增独立封装模块：隐藏的底部时间编辑触发器 ]] ---------------------
-        /* 功能目的：在页面底部生成伪装成文本的多次点击触发器。连续点击 6 次即可进入编辑模式，允许直接原位修改 HH:MM。
+        /* 功能目的：在页面底部生成伪装成文本的多次点击触发器。连续点击 6 次即可进入编辑模式，允许直接原位修改 HH:MM:SS。
            修改不会改变原有函数逻辑，采用函数拦截和事件委托完成修改与保存。
            更新：无操作 20 秒后自动退出编辑模式，无需再次点击。
         */
@@ -783,7 +811,7 @@
                         el.style.backgroundColor = '#ebf8ff';
                         el.style.borderRadius = '4px';
                         el.style.color = '#0096fa';
-                        el.title = "Edit time (HH:MM) and press Enter or click away to save";
+                        el.title = "Edit time (HH:MM or HH:MM:SS) and press Enter or click away to save";
                     } else {
                         el.removeAttribute('contenteditable');
                         el.style.borderBottom = 'none';
@@ -895,15 +923,15 @@
                 inputEl.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault(); // 阻止默认回车行为
-                        if (typeof window.startTimer === 'function') {
+                        if (typeof startTimer === 'function') {
                             // 保存当前输入的值，防止被已有的 stopTimer 逻辑清空
                             const currentVal = inputEl.value;
-                            if (window.isRunning) {
-                                window.stopTimer();
+                            if (isRunning) {
+                                stopTimer();
                             }
                             // 恢复输入值并开启新任务
                             inputEl.value = currentVal;
-                            window.startTimer(null);
+                            startTimer(null);
                             inputEl.blur(); // 开启后使输入框失去焦点，提升交互手感
                         }
                     }
@@ -921,8 +949,8 @@
                 textareaEl.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault(); // 阻止默认换行行为
-                        if (typeof window.handleTextareaImport === 'function') {
-                            window.handleTextareaImport();
+                        if (typeof handleTextareaImport === 'function') {
+                            handleTextareaImport();
                         }
                     }
                 });
@@ -933,15 +961,44 @@
 
         // [[ 新增独立封装模块：45分钟番茄钟休息提醒 & 测试小礼炮 ]] ---------------------
         /* 功能目的：
-           1. 任务计时期间，每满45分钟弹出休息提醒，Tab改变名称。
-           2. 点击小礼炮手动触发休息提醒后，无论原进度多少，45分钟重新开始计算。
-           3. 没有任何任务计时的情况下，绝对不会触发休息提醒。
-           4. 10秒不点击自动消失，或点击任意处、点击关闭按钮消失。
-           5. 页面右侧增加小礼炮(🎉)按钮，默认不可点、置灰状态。
-           6. 监听底部连续点击6次解锁（与编辑模式完全同步），解锁后可手动点击触发休息弹窗。
+           [新版逻辑更新]：
+           1. 废除45分钟相对计时，改为固定时刻的29分钟循环倒计时（第0~29分，第30~59分）。
+           2. 巨型倒计时显示在页面底端下移20%处。
+           3. 自动触发的弹窗5分钟自动消失；小礼炮直接连点6次触发，且永久显示直到手动关闭，两者互相独立。
+           4. 解除与“时间修改模式”按钮的挂钩，直接对小礼炮连点操作。
+           5. 弹窗支持按回车键、点击空白处关闭。
         */
         (function() {
-            // --- 1. 创建小礼炮按钮 UI ---
+            // --- 1. 创建巨型背景倒计时 UI ---
+            const giantTimer = document.createElement('div');
+            Object.assign(giantTimer.style, {
+                position: 'fixed',
+                bottom: '0',
+                left: '50%',
+                // 优化：将下移调至 20%，这样 80% 可见区域
+                transform: 'translate(-50%, 20%)',
+                fontSize: 'clamp(80px, 22vw, 300px)', 
+                fontWeight: '900',
+                color: '#a0aec0',
+
+                // 【这个地方是改动巨型倒计时的透明度】
+                // 数值范围是 0 到 1。
+                // 数值越小（如 0.1），透明度越低（越淡、越看不见）；
+                // 数值越大（如 0.9），透明度越高（越深、越清晰可见）。
+                opacity: '0.2', 
+
+                pointerEvents: 'none',
+                zIndex: '0', 
+                whiteSpace: 'nowrap',
+                fontVariantNumeric: 'tabular-nums',
+                userSelect: 'none',
+                display: 'none', 
+                lineHeight: '1'
+            });
+            giantTimer.textContent = "29:00";
+            document.body.appendChild(giantTimer);
+
+            // --- 2. 创建小礼炮按钮 UI ---
             const partyBtn = document.createElement('div');
             partyBtn.innerHTML = '🎉';
             Object.assign(partyBtn.style, {
@@ -957,20 +1014,20 @@
                 justifyContent: 'center',
                 alignItems: 'center',
                 fontSize: '24px',
-                cursor: 'not-allowed',
+                cursor: 'default', 
                 opacity: '0.3',
                 filter: 'grayscale(100%)',
                 transition: 'all 0.3s ease',
-                pointerEvents: 'none',
+                pointerEvents: 'auto', 
                 zIndex: '900',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid rgba(0,0,0,0.1)',
                 userSelect: 'none'
             });
-            partyBtn.title = "Break Time Trigger (Locked)";
+            partyBtn.title = "Break Time Trigger";
             document.body.appendChild(partyBtn);
 
-            // --- 2. 创建弹窗 UI ---
+            // --- 3. 创建弹窗 UI ---
             const breakModal = document.createElement('div');
             Object.assign(breakModal.style, {
                 display: 'none',
@@ -1001,7 +1058,7 @@
             closeBreakBtn.addEventListener('mouseover', () => { closeBreakBtn.style.background = 'rgba(255,255,255,0.3)'; });
             closeBreakBtn.addEventListener('mouseout', () => { closeBreakBtn.style.background = 'rgba(255,255,255,0.15)'; });
 
-            // --- 3. 弹窗控制逻辑 ---
+            // --- 4. 弹窗控制逻辑 ---
             let breakTimeout = null;
             const originalTitle = document.title;
 
@@ -1011,23 +1068,40 @@
                 document.title = originalTitle;
                 clearTimeout(breakTimeout);
                 document.removeEventListener('click', handleOutsideClick);
+                document.removeEventListener('keydown', handleKeydown);
             }
 
             function handleOutsideClick(e) {
                 closeBreakModal();
             }
 
-            function triggerBreakModal() {
+            function handleKeydown(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    closeBreakModal();
+                }
+            }
+
+            // isManual 标识是否是由小礼炮点击触发的
+            function triggerBreakModal(isManual = false) {
+                if (breakModal.style.display === 'flex') return; // 防重复触发
+                
                 breakModal.style.display = 'flex';
                 document.title = "Break Time!";
                 
                 clearTimeout(breakTimeout);
-                breakTimeout = setTimeout(() => {
-                    closeBreakModal();
-                }, 10000);
+                
+                if (!isManual) {
+                    // 如果是系统到点自动触发的，才执行 5 分钟自动消失
+                    breakTimeout = setTimeout(() => {
+                        closeBreakModal();
+                    }, 5 * 60 * 1000);
+                }
 
+                // 延迟绑定点击与回车，防止触发时的事件冒泡导致瞬间关闭
                 setTimeout(() => {
                     document.addEventListener('click', handleOutsideClick);
+                    document.addEventListener('keydown', handleKeydown);
                 }, 50);
             }
 
@@ -1036,99 +1110,100 @@
                 closeBreakModal();
             });
 
-            // --- 4. 45分钟独立解绑倒计时逻辑 ---
-            const FORTY_FIVE_MINS_MS = 45 * 60 * 1000;
-            let lastBreakResetTime = Date.now();
-            let wasRunning = false;
+            // --- 5. 小礼炮独立 6 次点击及视觉渐进机制 ---
+            let partyClickCount = 0;
+            let partyClickTimer = null;
+            
+            function resetPartyBtnVisual() {
+                partyBtn.style.opacity = '0.3';
+                partyBtn.style.filter = 'grayscale(100%)';
+            }
 
-            setInterval(() => {
-                if (window.isRunning) {
-                    if (!wasRunning) {
-                        // 刚刚从暂停变成开始，重置倒计时起点
-                        wasRunning = true;
-                        lastBreakResetTime = Date.now();
-                    } else {
-                        // 持续运行中，检查是否达到 45 分钟
-                        const elapsed = Date.now() - lastBreakResetTime;
-                        if (elapsed >= FORTY_FIVE_MINS_MS) {
-                            triggerBreakModal();
-                            lastBreakResetTime = Date.now(); // 触发后，重新开始下一个 45 分钟的倒数
-                        }
-                    }
-                } else {
-                    if (wasRunning) {
-                        // 刚刚从运行变成暂停，倒计时挂起失效
-                        wasRunning = false;
-                    }
+            function updatePartyBtnVisual(count) {
+                if (count === 0) {
+                    resetPartyBtnVisual();
+                } else if (count <= 5) {
+                    // 每次点击增加可视度和色彩：
+                    // count 1 到 5：Opacity 从 0.44 到 1.0, Grayscale 从 80% 到 0%
+                    const opacity = 0.3 + (count * 0.14);
+                    const gray = 100 - (count * 20);
+                    partyBtn.style.opacity = opacity.toString();
+                    partyBtn.style.filter = `grayscale(${gray}%)`;
                 }
-            }, 1000);
+            }
 
-            // 手动点击小礼炮
             partyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                triggerBreakModal();
-                // 如果当前有任务在跑，手动休息后，将下一个自动休息顺延到 45 分钟之后
-                if (window.isRunning) {
-                    lastBreakResetTime = Date.now();
+                partyClickCount++;
+                updatePartyBtnVisual(partyClickCount);
+
+                clearTimeout(partyClickTimer);
+                // 2 秒内无连续点击则自动复原
+                partyClickTimer = setTimeout(() => { 
+                    partyClickCount = 0; 
+                    resetPartyBtnVisual();
+                }, 2000);
+
+                if (partyClickCount >= 6) {
+                    partyClickCount = 0;
+                    resetPartyBtnVisual(); // 触发后立马重置为不可点视觉状态
+                    triggerBreakModal(true); // 手动触发，永久显示
                 }
             });
 
-            // --- 5. 同步底部解锁逻辑 ---
-            const footers = Array.from(document.querySelectorAll('.app-wrapper > div'));
-            const targetFooter = footers.find(el => el.textContent.includes('Powered by Tomatomash'));
+            // --- 6. 固定的 29/59 分钟钟表循环倒计时 ---
+            let lastTriggerMinute = -1;
 
-            if (targetFooter) {
-                let clickCount = 0;
-                let partyActive = false;
-                let clickTimer = null;
-                let autoExitTimer = null;
+            // 完美毫秒同步引擎：对齐到整秒边界，确保和主计时器毫秒不差
+            function giantTimerLoop() {
+                if (entries && entries.length > 0) {
+                    giantTimer.style.display = 'block';
+                    
+                    const now = new Date();
+                    const m = now.getMinutes();
+                    const s = now.getSeconds();
+                    
+                    let targetM = 0;
+                    let isBreakPeriod = false;
 
-                function lockPartyBtn() {
-                    partyActive = false;
-                    partyBtn.style.opacity = '0.3';
-                    partyBtn.style.filter = 'grayscale(100%)';
-                    partyBtn.style.pointerEvents = 'none';
-                    partyBtn.style.cursor = 'not-allowed';
-                    partyBtn.title = "Break Time Trigger (Locked)";
-                }
-
-                function unlockPartyBtn() {
-                    partyActive = true;
-                    partyBtn.style.opacity = '1';
-                    partyBtn.style.filter = 'none';
-                    partyBtn.style.pointerEvents = 'auto';
-                    partyBtn.style.cursor = 'pointer';
-                    partyBtn.title = "Click to trigger Break Time!";
-                }
-
-                function resetPartyAutoExit() {
-                    clearTimeout(autoExitTimer);
-                    if (partyActive) {
-                        autoExitTimer = setTimeout(() => {
-                            lockPartyBtn();
-                        }, 20000);
+                    // 计算目标时间点
+                    if (m < 29) {
+                        targetM = 29;
+                    } else if (m === 29) {
+                        isBreakPeriod = true;
+                    } else if (m < 59) {
+                        targetM = 59;
+                    } else if (m === 59) {
+                        isBreakPeriod = true;
                     }
-                }
 
-                targetFooter.addEventListener('click', () => {
-                    clickCount++;
-                    clearTimeout(clickTimer);
-                    clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
-
-                    if (clickCount >= 6) {
-                        clickCount = 0;
-                        unlockPartyBtn();
-                        resetPartyAutoExit();
+                    if (isBreakPeriod) {
+                        giantTimer.textContent = "BREAK";
+                        // 确保在一分钟内只调用一次触发函数
+                        if (lastTriggerMinute !== m) {
+                            lastTriggerMinute = m;
+                            triggerBreakModal(false); // 传入 false 表示自动触发
+                        }
+                    } else {
+                        // 精确计算距离第 29 / 59 分钟还有多少分多少秒
+                        const remainM = targetM - m - 1;
+                        const remainS = 60 - s;
+                        
+                        const finalS = remainS === 60 ? 0 : remainS;
+                        const finalM = remainS === 60 ? remainM + 1 : remainM;
+                        
+                        giantTimer.textContent = `${String(finalM).padStart(2, '0')}:${String(finalS).padStart(2, '0')}`;
                     }
-                });
-
-                const entryListContainer = document.getElementById('entryList');
-                if (entryListContainer) {
-                    entryListContainer.addEventListener('focusin', () => { if(partyActive) resetPartyAutoExit(); });
-                    entryListContainer.addEventListener('focusout', () => { if(partyActive) resetPartyAutoExit(); });
-                    entryListContainer.addEventListener('keydown', () => { if(partyActive) resetPartyAutoExit(); });
+                } else {
+                    giantTimer.style.display = 'none';
+                    lastTriggerMinute = -1; 
                 }
+                
+                // 递归计算下一个整秒边界
+                setTimeout(giantTimerLoop, 1000 - (Date.now() % 1000));
             }
+            // 初始化同步启动
+            setTimeout(giantTimerLoop, 1000 - (Date.now() % 1000));
 
         })();
         // [[ 模块结束 ]] -------------------------------------------------------
