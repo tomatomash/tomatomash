@@ -974,9 +974,11 @@
             Object.assign(giantTimer.style, {
                 position: 'fixed',
                 bottom: '0',
-                left: '50%',
-                // 优化：将下移调至 20%，这样 80% 可见区域
-                transform: 'translate(-50%, 20%)',
+                left: '0',           // 优化：取消 50% 定位，从最左侧开始
+                width: '100%',       // 优化：容器撑满全宽
+                textAlign: 'center', // 优化：改用 text-align 居中，避免动态计算 translateX 导致的抖动
+                // 优化：将下移调至 20%，仅在 Y 轴平移
+                transform: 'translateY(20%)',
                 fontSize: 'clamp(80px, 22vw, 300px)', 
                 fontWeight: '900',
                 color: '#a0aec0',
@@ -991,6 +993,7 @@
                 zIndex: '0', 
                 whiteSpace: 'nowrap',
                 fontVariantNumeric: 'tabular-nums',
+                fontFamily: 'Consolas, Monaco, monospace', // 优化：加入等宽字体族，彻底杜绝不同数字本身宽度不一致导致的闪动
                 userSelect: 'none',
                 display: 'none', 
                 lineHeight: '1'
