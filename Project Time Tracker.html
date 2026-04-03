@@ -1245,13 +1245,13 @@
                     if (typeof entries === 'undefined' || entries.length === 0) return;
 
                     const now = new Date();
-            const s = now.getSeconds(); // 把获取“分”改成获取“秒”
+                    const m = now.getMinutes();
 
-            // 测试逻辑：如果当前秒数是 10 的倍数（0, 10, 20, 30, 40, 50）
-            if (s % 10 === 0 && lastNotifiedMinute !== s) {
-                lastNotifiedMinute = s; // 借用这个变量存一下秒数，防止在同一秒内疯狂弹窗
-                triggerDesktopNotification();
-            }
+                    // 判断是否到了你设定的 29 分钟或 59 分钟休息点
+                    if ((m === 29 || m === 59) && lastNotifiedMinute !== m) {
+                        lastNotifiedMinute = m; // 记录已通知的分，防止在这一分钟内连发 60 条
+                        triggerDesktopNotification();
+                    }
                 }
             };
 
