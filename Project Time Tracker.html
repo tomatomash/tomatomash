@@ -1209,6 +1209,66 @@
         // [[ 模块结束 ]] -------------------------------------------------------
 
 
+        // [[ 新增独立封装模块：Web Worker 桌面通知保活系统 ]] -----------------------
+        /* 功能目的：
+           1. 解决浏览器后台休眠导致无法按时提醒的问题。
+           2. 首次点击页面时自动静默申请桌面通知权限。
+           3. 利用 Web Worker 独立线程，在每小时的 29分 和 59分 精准触发系统级桌面通知卡片。
+           4. 完全不干扰或修改前序逻辑，纯粹作为外挂监视器运行。
+        */
+        (function() {
+            // 1. 静默申请系统通知权限 (当用户第一次在页面上产生点击交互时触发)
+            const requestPermission = () => {
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    Notification.requestPermission();
+                }
+                // 申请完就移除监听，避免重复触发
+                document.removeEventListener('click', requestPermission);
+            };
+            document.addEventListener('click', requestPermission);
+
+            // 2. 将 Web Worker 代码转换为 Blob (这样就不用拆分 js 文件了)
+            const workerCode = `
+                setInterval(() => {
+                    self.postMessage('tick');
+                }, 1000); // 后台心脏，每秒跳动一次
+            `;
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            const worker = new Worker(URL.createObjectURL(blob));
+
+            let lastNotifiedMinute = -1;
+
+            // 3. 监听后台 Worker 发来的信号
+            worker.onmessage = function(e) {
+                if (e.data === 'tick') {
+                    // 如果全局的 entries 数组不存在，或者里面没有任务(说明还没开始用)，则不发通知
+                    if (typeof entries === 'undefined' || entries.length === 0) return;
+
+                    const now = new Date();
+            const s = now.getSeconds(); // 把获取“分”改成获取“秒”
+
+            // 测试逻辑：如果当前秒数是 10 的倍数（0, 10, 20, 30, 40, 50）
+            if (s % 10 === 0 && lastNotifiedMinute !== s) {
+                lastNotifiedMinute = s; // 借用这个变量存一下秒数，防止在同一秒内疯狂弹窗
+                triggerDesktopNotification();
+            }
+                }
+            };
+
+            // 4. 调用系统底层 API 弹出通知卡片
+            function triggerDesktopNotification() {
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('☕ Break Time!', {
+                        body: 'Stand up! Look away! 该停下来休息一下眼睛了。',
+                        icon: 'https://cdn-icons-png.flaticon.com/512/2082/2082869.png', // 咖啡杯小图标
+                        requireInteraction: true // 强制通知停留在屏幕上，直到用户手动点击关闭
+                    });
+                }
+            }
+        })();
+        // [[ 模块结束 ]] -------------------------------------------------------
+
+
         init();
     </script>
 </body>
