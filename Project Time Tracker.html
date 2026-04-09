@@ -1095,10 +1095,10 @@
                 clearTimeout(breakTimeout);
                 
                 if (!isManual) {
-                    // 如果是系统到点自动触发的，才执行 5 分钟自动消失
+                    // 如果是系统到点自动触发的，执行 n 分钟后会自动消失
                     breakTimeout = setTimeout(() => {
                         closeBreakModal();
-                    }, 5 * 60 * 1000);
+                    }, 1 * 60 * 1000);
                 }
 
                 // 延迟绑定点击与回车，防止触发时的事件冒泡导致瞬间关闭
