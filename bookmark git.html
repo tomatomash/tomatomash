@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义折叠网址面板</title>
+    <style>
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family: "Microsoft Yahei", system-ui, sans-serif;
+        }
+        body{
+            background:#f8f9fc;
+            padding:25px;
+        }
+        .container{
+            max-width:820px;
+            margin:0 auto;
+        }
+
+        /* 折叠模块通用样式 */
+        .collapse-item{
+            margin-bottom:12px;
+        }
+        .collapse-btn{
+            width:100%;
+            padding:15px 18px;
+            background: linear-gradient(135deg, #5b9cf7, #4b88e6);
+            color:#fff;
+            border:none;
+            border-radius:10px;
+            text-align:left;
+            font-size:16px;
+            font-weight:500;
+            cursor:pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 2px 6px rgba(91,156,247,0.15);
+        }
+        .collapse-btn:hover{
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(91,156,247,0.2);
+        }
+        .collapse-content{
+            background:#ffffff;
+            padding:18px 20px;
+            border-radius:0 0 10px 10px;
+            display:none;
+            border:1px solid #f0f2f5;
+            border-top:none;
+            line-height:2.1;
+            color:#333;
+        }
+        /* 网址前自动加小黑点，不影响粘贴代码 */
+        .collapse-content a{
+            display: list-item;
+            list-style-type: disc;
+            list-style-position: inside;
+            color:#3e7dfe;
+            word-break:break-all;
+            text-decoration:none;
+            font-weight:450;
+            margin-left: 8px;
+        }
+        .collapse-content a:hover{
+            text-decoration:underline;
+            color:#2668f0;
+        }
+        .show{
+            display:block;
+        }
+
+        /* 网址展示区 */
+        .link-box{
+            background:#fff;
+            padding:24px;
+            border-radius:14px;
+            box-shadow:0 3px 15px rgba(0,0,0,0.05);
+            margin-bottom:32px;
+        }
+        .section-title{
+            font-size:22px;
+            margin-bottom:22px;
+            color:#2d3748;
+            font-weight:bold;
+        }
+
+        /* 底部转换工具 */
+        .tool-box{
+            background:#fff;
+            padding:22px;
+            border-radius:12px;
+            box-shadow:0 3px 12px rgba(0,0,0,0.04);
+        }
+        .tool-title{
+            font-size:20px;
+            color:#2d3748;
+            margin-bottom:12px;
+            font-weight:bold;
+        }
+        .tool-desc{
+            color:#64748b;
+            margin-bottom:10px;
+            line-height:1.5;
+            font-size:14px;
+        }
+        #urlInput{
+            width:100%;
+            height:200px;
+            padding:14px;
+            border:1px solid #e2e8f0;
+            border-radius:10px;
+            resize:vertical;
+            font-size:14px;
+            line-height:1.6;
+            background:#fbfcfd;
+        }
+        .btn-group{
+            margin:14px 0;
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+        }
+        .gen-btn,.copy-btn{
+            padding:11px 22px;
+            border:none;
+            border-radius:9px;
+            cursor:pointer;
+            font-size:15px;
+            color:#fff;
+            font-weight:500;
+            transition: all 0.2s ease;
+        }
+        .gen-btn{
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+        }
+        .gen-btn:hover{
+            opacity:0.92;
+        }
+        .copy-btn{
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+        }
+        .copy-btn:hover{
+            opacity:0.92;
+        }
+        .result-box{
+            background:#f8fafc;
+            padding:16px;
+            border-radius:10px;
+            border:1px solid #e2e8f0;
+            white-space:pre-wrap;
+            word-break:break-all;
+            font-size:13px;
+            color:#333;
+            max-height:240px;
+            overflow-y:auto;
+        }
+        .tool-collapse-btn{
+            background: linear-gradient(135deg, #94a3b8, #64748b);
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+<!-- ==================== 折叠网址展示区 ==================== -->
+<div class="link-box">
+    <div class="section-title">📂 折叠网址模块列表</div>
+
+    <!-- 🟢 【DIY核心】新增模块·复制这块 👇 -->
+    <!-- ⚠️ 重要提醒：粘贴后务必删除首尾的 <!-- 和 -->，否则模块不会显示！ -->
+    <!-- 👇 复制开始 👇 -->
+    <!--
+        <div class="collapse-item">
+            <button class="collapse-btn">网址模块 自定义名称</button>
+            <div class="collapse-content">
+                👉 粘贴区开始
+                👉 粘贴区结束
+            </div>
+        </div>
+        <br>
+    -->
+    <!-- 👆 复制结束 👆 -->
+
+    <!-- ====================================================== -->
+    <!-- 🔵 网址模块 01 -->
+    <!-- ====================================================== -->
+    <div class="collapse-item">
+        <button class="collapse-btn">网址模块 01</button>
+        <div class="collapse-content">
+            <!-- 👉 粘贴区开始 👉 -->
+            <a href="http://halihali1.top/mov/3512/" target="_blank">http://halihali1.top/mov/3512/</a><br>
+            <!-- 👈 粘贴区结束 👈 -->
+        </div>
+    </div>
+    <br>
+
+    <!-- ====================================================== -->
+    <!-- 🔵 网址模块 02 -->
+    <!-- ====================================================== -->
+    <div class="collapse-item">
+        <button class="collapse-btn">网址模块 02</button>
+        <div class="collapse-content">
+            <!-- 👉 粘贴区开始 👉 -->
+            <a href="https://mp.weixin.qq.com/s/fWZgeUCE2eg_S3dER9KPZg" target="_blank">https://mp.weixin.qq.com/s/fWZgeUCE2eg_S3dER9KPZg</a><br>
+            <!-- 👈 粘贴区结束 👈 -->
+        </div>
+    </div>
+    <br>
+
+    <!-- ====================================================== -->
+    <!-- 🔵 网址模块 03 -->
+    <!-- ====================================================== -->
+    <div class="collapse-item">
+        <button class="collapse-btn">网址模块 03</button>
+        <div class="collapse-content">
+            <!-- 👉 粘贴区开始 👉 -->
+            <a href="https://www.youtube.com/watch?v=CIAbfzWlp5A" target="_blank">https://www.youtube.com/watch?v=CIAbfzWlp5A</a><br>
+            <!-- 👈 粘贴区结束 👈 -->
+        </div>
+    </div>
+    <br>
+
+    <!-- ====================================================== -->
+    <!-- 🟡 新增模块粘贴区：复制好的模块，粘贴到这里即可 -->
+    <!-- ====================================================== -->
+
+</div>
+
+<!-- ==================== 底部折叠转换工具 ==================== -->
+<div class="collapse-item">
+    <button class="collapse-btn tool-collapse-btn">🔧 智能网址转换工具（点击展开/收起）</button>
+    <div class="collapse-content">
+        <div class="tool-box">
+            <div class="tool-title">🧠 智能识别网址 + 标题工具</div>
+            <div class="tool-desc">
+                支持粘贴以下任意格式，自动提取：<br>
+                1. 浏览器导出书签：&lt;DT&gt;&lt;A HREF="..."&gt;名称&lt;/A&gt;<br>
+                2. 自定义a标签：&lt;a href="..."&gt;名称&lt;/a&gt;<br>
+                3. 混合乱贴也能识别！只抓链接+标题
+            </div>
+            <textarea id="urlInput" placeholder="直接粘贴复制的书签/代码片段..."></textarea>
+            <div class="btn-group">
+                <button class="gen-btn" onclick="generateCode()">智能提取并生成代码</button>
+                <button class="copy-btn" onclick="copyResult()">一键复制结果</button>
+            </div>
+            <div class="tool-desc">👇 生成后复制，粘贴到上方网址模块即可</div>
+            <div id="resultArea" class="result-box"></div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+    // 智能提取 href 和 标题
+    function extractLinksFromHtml(html) {
+        const linkRegex = /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+        const results = [];
+        let match;
+        while ((match = linkRegex.exec(html)) !== null) {
+            const url = match[1].trim();
+            const title = match[2].trim().replace(/\s+/g, ' ');
+            if (url) results.push({ url, title });
+        }
+        return results;
+    }
+
+    // 生成标准代码
+    function generateCode() {
+        const input = document.getElementById('urlInput').value.trim();
+        if (!input) { alert('请先粘贴内容'); return; }
+        const links = extractLinksFromHtml(input);
+        if (links.length === 0) { alert('未识别到任何有效链接'); return; }
+        let code = '';
+        links.forEach(link => {
+            code += `<a href="${link.url}" target="_blank">${link.title}</a><br>\n`;
+        });
+        document.getElementById('resultArea').textContent = code;
+    }
+
+    // 一键复制
+    function copyResult() {
+        const result = document.getElementById('resultArea').textContent;
+        if (!result) { alert('先生成代码再复制'); return; }
+        navigator.clipboard.writeText(result).then(()=>{
+            alert('复制成功！直接粘贴到模块里即可');
+        }).catch(()=>{
+            alert('复制失败，请手动选中复制');
+        });
+    }
+
+    // 折叠开关
+    document.querySelectorAll('.collapse-btn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            btn.nextElementSibling.classList.toggle('show');
+        })
+    });
+</script>
+</body>
+</html>
